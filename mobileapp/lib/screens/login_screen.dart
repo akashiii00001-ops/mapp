@@ -1,22 +1,18 @@
 import 'dart:convert';
-import 'dart:ui'; // For BackdropFilter
+import 'dart:ui'; 
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart'; // For HapticFeedback
+import 'package:flutter/services.dart'; 
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:http/http.dart' as http;
 import 'package:lottie/lottie.dart';
 import 'package:provider/provider.dart';
 
-// Imports from your existing project
 import 'package:mobileapp/theme.dart';
 import 'package:mobileapp/widgets/loading_dialog.dart';
-
-// NEW Config & Provider Imports
 import 'package:mobileapp/config.dart'; 
 import 'package:mobileapp/providers/auth_provider.dart';
-import 'package:mobileapp/providers/user_provider.dart'; // REQUIRED for saving user info
+import 'package:mobileapp/providers/user_provider.dart'; 
 
-// Screen Imports
 import 'package:mobileapp/screens/home_screen.dart';
 import 'package:mobileapp/screens/identity_verify_screen.dart';
 import 'package:mobileapp/screens/email_2fa_screen.dart';
@@ -31,14 +27,12 @@ class LoginScreen extends StatefulWidget {
 }
 
 class _LoginScreenState extends State<LoginScreen> {
-  // --- Variables ---
   bool _obscureText = true;
   final TextEditingController _studentNumberController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
 
-  // --- Variables for UI animations ---
   bool _isLogoHovering = false;
-  Offset _logoOffset = Offset.zero; // For parallax effect
+  Offset _logoOffset = Offset.zero; 
   bool _isStudentNumberFocused = false;
   bool _isPasswordFocused = false;
   final FocusNode _studentNumberFocus = FocusNode();
@@ -48,7 +42,6 @@ class _LoginScreenState extends State<LoginScreen> {
   @override
   void initState() {
     super.initState();
-    // Listeners for focus changes to animate text fields
     _studentNumberFocus.addListener(() {
       setState(() {
         _isStudentNumberFocused = _studentNumberFocus.hasFocus;
@@ -60,7 +53,6 @@ class _LoginScreenState extends State<LoginScreen> {
       });
     });
 
-    // Set the auth progress to the first step
     WidgetsBinding.instance.addPostFrameCallback((_) {
       context.read<AuthProvider>().setStep(AuthStep.login);
     });
@@ -68,7 +60,6 @@ class _LoginScreenState extends State<LoginScreen> {
 
   @override
   void dispose() {
-    // Dispose all controllers and nodes
     _studentNumberController.dispose();
     _passwordController.dispose();
     _studentNumberFocus.dispose();
@@ -76,18 +67,10 @@ class _LoginScreenState extends State<LoginScreen> {
     super.dispose();
   }
 
-  //
-  // --- --------------------------------- ---
-  // ---   FIXED LOGIN LOGIC STARTS HERE   ---
-  // --- --------------------------------- ---
-  //
   Future<void> _handleLogin() async {
-    // Set progress step to login
     context.read<AuthProvider>().setStep(AuthStep.login);
-
     showLoadingDialog(context, 'Logging in...');
     
-    // [FIX] Use the Config URL
     final url = Uri.parse(Config.loginUrl);
 
     try {
@@ -100,7 +83,7 @@ class _LoginScreenState extends State<LoginScreen> {
         }),
       );
 
-      if (mounted) Navigator.of(context).pop(); // Close loading dialog
+      if (mounted) Navigator.of(context).pop(); 
 
       if (response.statusCode != 200) {
         _showErrorDialog('Server returned error ${response.statusCode}');
@@ -116,7 +99,6 @@ class _LoginScreenState extends State<LoginScreen> {
         return;
       }
 
-      // [CRITICAL FIX] Save User Info to Provider so "Welcome" works
       if (responseBody.containsKey('student_id')) {
         String fullName = "Student";
         if (responseBody['fname'] != null) {
@@ -136,7 +118,6 @@ class _LoginScreenState extends State<LoginScreen> {
         );
       }
 
-      // [FIX] Navigation Logic based on Status
       if (status == 'security_questions_required') {
         final studentId = responseBody['student_id'];
         if (mounted) {
@@ -162,7 +143,6 @@ class _LoginScreenState extends State<LoginScreen> {
           );
         }
       } else {
-        // If status is success (or no security required), go to Home
          if (mounted) {
            Navigator.of(context).pushReplacement(
             MaterialPageRoute(builder: (context) => const HomeScreen()),
@@ -179,7 +159,7 @@ class _LoginScreenState extends State<LoginScreen> {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        backgroundColor: kPrimaryDark.withOpacity(0.9),
+        backgroundColor: kPrimaryDark.withValues(alpha: 0.9),
         title: const Text('Login Error', style: TextStyle(color: Colors.redAccent)),
         content: Text(message, style: const TextStyle(color: Colors.white)),
         actions: [
@@ -191,15 +171,7 @@ class _LoginScreenState extends State<LoginScreen> {
       ),
     );
   }
-  // --- --------------------------------- ---
-  // ---   END OF FIXED LOGIN LOGIC        ---
-  // --- --------------------------------- ---
 
-  //
-  // --- ------------------------------------------ ---
-  // --- NEW NOTIFICATION BUTTON & RECOVERY LOGIC ---
-  // --- ------------------------------------------ ---
-  //
   Future<void> _checkRecoveryStatus() async {
     if (_studentNumberController.text.isEmpty) {
       _showNotificationDialog(
@@ -220,7 +192,7 @@ class _LoginScreenState extends State<LoginScreen> {
         body: json.encode({'student_number': _studentNumberController.text}),
       );
 
-      if (mounted) Navigator.of(context).pop(); // Close loading dialog
+      if (mounted) Navigator.of(context).pop(); 
 
       final responseBody = json.decode(response.body);
       String title = 'Notification';
@@ -269,7 +241,7 @@ class _LoginScreenState extends State<LoginScreen> {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        backgroundColor: kPrimaryDark.withOpacity(0.9),
+        backgroundColor: kPrimaryDark.withValues(alpha: 0.9),
         title: Text(title, style: TextStyle(color: titleColor)),
         content: Text(message, style: const TextStyle(color: Colors.white)),
         actions: [
@@ -287,8 +259,6 @@ class _LoginScreenState extends State<LoginScreen> {
     return Scaffold(
       body: Stack(
         children: [
-          // --- Layer 1: Animated Lottie Background ---
-          // Make sure this asset exists, otherwise comment it out
           Lottie.asset(
             'assets/animations/particles_background.json',
             width: double.infinity,
@@ -297,12 +267,11 @@ class _LoginScreenState extends State<LoginScreen> {
             errorBuilder: (context, error, stackTrace) => Container(color: kPrimaryDark),
           ),
 
-          // --- Layer 2: Gradient Overlay ---
           Container(
             decoration: BoxDecoration(
               gradient: LinearGradient(
                 colors: [
-                  kPrimaryDark.withOpacity(0.8),
+                  kPrimaryDark.withValues(alpha: 0.8),
                   kPrimaryDark,
                 ],
                 begin: Alignment.topCenter,
@@ -311,7 +280,6 @@ class _LoginScreenState extends State<LoginScreen> {
             ),
           ),
 
-          // --- Layer 3: Notification Button ---
           SafeArea(
             child: Align(
               alignment: Alignment.topRight,
@@ -340,14 +308,12 @@ class _LoginScreenState extends State<LoginScreen> {
             ),
           ),
 
-          // --- Layer 4: Login Content ---
           Center(
             child: SingleChildScrollView(
               padding: const EdgeInsets.all(24.0),
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  // --- Animated Logo ---
                   _buildAnimatedLogo(),
                   const SizedBox(height: 20),
                   const Text(
@@ -368,11 +334,9 @@ class _LoginScreenState extends State<LoginScreen> {
                   ),
                   const SizedBox(height: 30),
 
-                  // --- Glassmorphism Card ---
                   _buildGlassCard(
                     child: Column(
                       children: [
-                        // --- Student Number Field ---
                         _buildTextField(
                           controller: _studentNumberController,
                           focusNode: _studentNumberFocus,
@@ -383,7 +347,6 @@ class _LoginScreenState extends State<LoginScreen> {
                         ),
                         const SizedBox(height: 16),
                         
-                        // --- Password Field ---
                         _buildTextField(
                           controller: _passwordController,
                           focusNode: _passwordFocus,
@@ -396,10 +359,8 @@ class _LoginScreenState extends State<LoginScreen> {
                         ),
                         const SizedBox(height: 24),
                         
-                        // --- Login Button ---
                         _buildLoginButton(),
                         
-                        // --- Forgot Password Button ---
                         TextButton(
                           onPressed: () {
                             Navigator.of(context).push(MaterialPageRoute(
@@ -423,12 +384,6 @@ class _LoginScreenState extends State<LoginScreen> {
       ),
     );
   }
-
-  //
-  // --- --------------------- ---
-  // --- ORIGINAL ANIMATED WIDGETS ---
-  // --- --------------------- ---
-  //
 
   Widget _buildAnimatedLogo() {
     return MouseRegion(
@@ -459,7 +414,7 @@ class _LoginScreenState extends State<LoginScreen> {
           boxShadow: _isLogoHovering
               ? [
                   BoxShadow(
-                    color: kPrimaryGold.withOpacity(0.7),
+                    color: kPrimaryGold.withValues(alpha: 0.7),
                     blurRadius: 30,
                     spreadRadius: 5,
                   ),
@@ -486,10 +441,10 @@ class _LoginScreenState extends State<LoginScreen> {
         child: Container(
           padding: const EdgeInsets.all(24),
           decoration: BoxDecoration(
-            color: Colors.white.withOpacity(0.1),
+            color: Colors.white.withValues(alpha: 0.1),
             borderRadius: BorderRadius.circular(20),
             border: Border.all(
-              color: Colors.white.withOpacity(0.2),
+              color: Colors.white.withValues(alpha: 0.2),
             ),
           ),
           child: child,
@@ -515,7 +470,7 @@ class _LoginScreenState extends State<LoginScreen> {
         boxShadow: isFocused
             ? [
                 BoxShadow(
-                  color: kPrimaryGold.withOpacity(0.5),
+                  color: kPrimaryGold.withValues(alpha: 0.5),
                   blurRadius: 10,
                   spreadRadius: 2,
                 )
@@ -531,9 +486,9 @@ class _LoginScreenState extends State<LoginScreen> {
         onSubmitted: onSubmitted,
         decoration: InputDecoration(
           hintText: hint,
-          hintStyle: TextStyle(color: Colors.white.withOpacity(0.7)),
+          hintStyle: TextStyle(color: Colors.white.withValues(alpha: 0.7)),
           filled: true,
-          fillColor: Colors.black.withOpacity(0.3),
+          fillColor: Colors.black.withValues(alpha: 0.3),
           prefixIcon: Padding(
             padding: const EdgeInsets.only(left: 20, right: 12),
             child: AnimatedTheme(
@@ -569,7 +524,7 @@ class _LoginScreenState extends State<LoginScreen> {
           ),
           enabledBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(30),
-            borderSide: BorderSide(color: Colors.white.withOpacity(0.3)),
+            borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.3)),
           ),
           focusedBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(30),
@@ -591,7 +546,7 @@ class _LoginScreenState extends State<LoginScreen> {
           boxShadow: _isLoginButtonHovering
               ? [
                   BoxShadow(
-                    color: kPrimaryGold.withOpacity(0.5),
+                    color: kPrimaryGold.withValues(alpha: 0.5),
                     blurRadius: 20,
                     spreadRadius: 0,
                   ),

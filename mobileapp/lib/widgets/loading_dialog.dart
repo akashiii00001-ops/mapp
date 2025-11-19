@@ -1,36 +1,34 @@
 import 'package:flutter/material.dart';
-import 'package:lottie/lottie.dart';
-import 'package:mobileapp/theme.dart';
+import 'package:mobileapp/theme.dart'; // Import theme constants
 
 void showLoadingDialog(BuildContext context, String message) {
   showDialog(
     context: context,
     barrierDismissible: false,
-    builder: (BuildContext context) {
-      return AlertDialog(
-        backgroundColor: psuLightYellow,
+    builder: (context) {
+      return Dialog(
+        backgroundColor: kPrimaryDark, // Use new dark theme color
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(20),
+          borderRadius: BorderRadius.circular(15),
+          side: const BorderSide(color: Colors.white10), // Subtle border
         ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Lottie.asset(
-              'assets/animations/book_loading.json',
-              width: 150,
-              height: 150,
-            ),
-            const SizedBox(height: 20),
-            Text(
-              message,
-              textAlign: TextAlign.center,
-              style: const TextStyle(
-                fontSize: 18,
-                color: psuBlue,
-                fontWeight: FontWeight.w600,
+        child: Padding(
+          padding: const EdgeInsets.all(20.0),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const CircularProgressIndicator(
+                valueColor: AlwaysStoppedAnimation<Color>(kPrimaryGold), // Use gold spinner
               ),
-            ),
-          ],
+              const SizedBox(width: 20),
+              Flexible(
+                child: Text(
+                  message, 
+                  style: const TextStyle(color: Colors.white), // White text
+                ),
+              ),
+            ],
+          ),
         ),
       );
     },

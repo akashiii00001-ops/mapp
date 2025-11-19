@@ -26,8 +26,20 @@ if (empty($student_number) || empty($password_from_app)) {
     echo json_encode(['status' => 'error', 'message' => 'Student number or password is empty']); exit;
 }
 
-// --- 1. Verify Student Credentials ---
-$stmt = $conn->prepare("SELECT student_id, password, email FROM student_login WHERE student_number = ?");
+// --- 1. Verify Student Credentials & Fetch Profile Data ---
+// JOIN tables to get Name and Batch Year for the app's UserProvider
+$query = "
+    SELECT 
+        sl.student_id, sl.password, sl.email, 
+        s.fname, s.lname, 
+        b.batch_year
+    FROM student_login sl
+    JOIN students s ON sl.student_id = s.student_id
+    LEFT JOIN batch b ON s.batch_id = b.batch_id
+    WHERE sl.student_number = ?
+";
+
+$stmt = $conn->prepare($query);
 $stmt->bind_param("s", $student_number);
 $stmt->execute();
 $result = $stmt->get_result();
@@ -37,10 +49,16 @@ if ($result->num_rows === 1) {
     $hashed_password_from_db = $row['password'];
     $student_id = $row['student_id'];
     $email = $row['email'];
+    
+    // Data for App State
+    $fname = $row['fname'];
+    $lname = $row['lname'];
+    $batch_year = $row['batch_year'];
 
     if (password_verify($password_from_app, $hashed_password_from_db)) {
         
         // --- 2. Check if user has *ever* completed the first-time setup ---
+        // We check the log for a previous successful 2FA or setup completion
         $log_action = "Mobile app 2FA successful"; 
         $log_check_stmt = $conn->prepare("SELECT 1 FROM student_activity_log WHERE student_id = ? AND action = ? LIMIT 1");
         $log_check_stmt->bind_param("is", $student_id, $log_action);
@@ -50,64 +68,41 @@ if ($result->num_rows === 1) {
 
         if ($is_setup_complete) {
             // --- USER IS A RETURNING, VERIFIED USER ---
-            if (empty($email)) {
-                // Failsafe
-                $action = "Login step 1 success (pending security questions)";
+
+            if (!empty($email)) {
+                // --- SCENARIO: User has Email -> LOGIN DIRECTLY (Skip 2FA) ---
+                
+                // Log this successful login
+                $action = "Logged in via mobile app";
+                $log_stmt = $conn->prepare("INSERT INTO student_activity_log (student_id, action) VALUES (?, ?)");
+                $log_stmt->bind_param("is", $student_id, $action);
+                $log_stmt->execute(); 
+                $log_stmt->close();
+
+                echo json_encode([
+                    'status' => 'success',
+                    'message' => 'Login successful',
+                    'student_id' => $student_id,
+                    'fname' => $fname,
+                    'lname' => $lname,
+                    'batch_year' => $batch_year
+                ]);
+                exit;
+
+            } else {
+                // --- SCENARIO: User verified before but Email is missing ---
+                // Send them to security questions to re-establish identity/email
+                $action = "Login step 1 success (email missing, security check required)";
                 $log_stmt = $conn->prepare("INSERT INTO student_activity_log (student_id, action) VALUES (?, ?)");
                 $log_stmt->bind_param("is", $student_id, $action);
                 $log_stmt->execute(); $log_stmt->close();
                 
                 echo json_encode([
                     'status' => 'security_questions_required',
-                    'message' => 'Please re-verify your identity.',
+                    'message' => 'Please re-verify your identity to set up your email.',
                     'student_id' => $student_id
                 ]);
                 exit;
-            }
-
-            // Generate, Save, and Email 2FA Code
-            $two_fa_code = rand(100000, 999999);
-            // --- FIX: Use gmdate() for UTC time ---
-            $expiry_time = gmdate('Y-m-d H:i:s', strtotime('+5 minutes'));
-            
-            $code_stmt = $conn->prepare("UPDATE student_login SET two_fa_code = ?, otp_expires = ? WHERE student_id = ?");
-            $code_stmt->bind_param("ssi", $two_fa_code, $expiry_time, $student_id);
-            $code_stmt->execute();
-            $code_stmt->close();
-
-            // Log this attempt
-            $action = "Logged in via mobile app (pending 2FA)";
-            $log_stmt = $conn->prepare("INSERT INTO student_activity_log (student_id, action) VALUES (?, ?)");
-            $log_stmt->bind_param("is", $student_id, $action);
-            $log_stmt->execute();
-            $log_stmt->close();
-
-            // --- Send Email ---
-            $mail = new PHPMailer(true);
-            try {
-                $mail->isSMTP();
-                $mail->Host       = 'smtp.gmail.com';
-                $mail->SMTPAuth   = true;
-                $mail->Username   = 'alumni.management.system1@gmail.com'; 
-                $mail->Password   = 'cgra rahs cgpi zwjj'; 
-                $mail->SMTPSecure = PHPMailer::ENCRYPTION_STARTTLS;
-                $mail->Port       = 587;
-                $mail->setFrom('no-reply@psu-yearbook.com', 'PSU Yearbook Security');
-                $mail->addAddress($email);
-                $mail->isHTML(true);
-                $mail->Subject = 'PSU Yearbook Login Verification Code';
-                $mail->Body    = "Your login verification code is: <b>$two_fa_code</b><br>This code will expire in 5 minutes.";
-                $mail->send();
-
-                echo json_encode([
-                    'status' => 'email_2fa_required', 
-                    'message' => 'Please check your email for a verification code.',
-                    'student_id' => $student_id,
-                    'student_email' => $email 
-                ]);
-
-            } catch (Exception $e) {
-                echo json_encode(['status' => 'error', 'message' => "Login success, but failed to send 2FA email. {$mail->ErrorInfo}"]);
             }
 
         } else {

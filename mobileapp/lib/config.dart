@@ -8,15 +8,16 @@ class Config {
   static const String domain = 'http://10.0.2.2'; 
   
   // 1. API BASE URL (Where your PHP files are)
-  // Based on your original file, this is likely directly in htdocs
   static const String baseUrl = '$domain/psu_yearbook_api';
   static const String apiUrl = baseUrl;
 
-  // 2. IMAGES BASE URL (Where your photos are)
-  // You mentioned these are inside the CAPSTONE folder
-  static const String uploadsUrl = '$domain/CAPSTONE/uploads';
-  
-  // Helper paths for specific image types
+  // 2. PROJECT ROOT URL (Where your CAPSTONE folder is)
+  // This matches your path: C:\xampp\htdocs\CAPSTONE
+  static const String projectRootUrl = '$domain/CAPSTONE';
+
+  // 3. SPECIFIC UPLOADS FOLDERS
+  // These are fallbacks. The code in HomeScreen now handles relative paths dynamically.
+  static const String uploadsUrl = '$projectRootUrl/uploads';
   static const String announcementImgUrl = '$uploadsUrl/announcements';
   static const String eventImgUrl = '$uploadsUrl/events';
   static const String jobImgUrl = '$uploadsUrl/jobs';

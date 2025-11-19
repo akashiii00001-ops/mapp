@@ -9,6 +9,11 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
+  lucide_icons: 0.257.0 # Matches your React icon set
+  google_fonts: ^6.1.0
+  glassmorphism: ^3.0.0 # Optional helper, but I used native BackdropFilter below for control
+  
+    
   
   # --- Dependencies ---
   shared_preferences: ^2.2.2
@@ -19,6 +24,7 @@ dependencies:
   flutter_animate: ^4.5.0
   pinput: ^4.0.0 
   cupertino_icons: ^1.0.2
+
   
   # Add this line to fix the error:
   image_picker: ^1.0.7 
