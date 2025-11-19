@@ -8,7 +8,7 @@ import 'package:mobileapp/config.dart';
 import 'package:mobileapp/theme.dart';
 import 'package:mobileapp/providers/theme_provider.dart';
 import 'package:mobileapp/providers/user_provider.dart';
-import 'package:mobileapp/screens/employment_history_screen.dart';
+import 'package:mobileapp/screens/employment_history_screen.dart'; // Ensure this matches the filename below
 import 'package:mobileapp/screens/settings_screen.dart';
 import 'package:mobileapp/screens/login_screen.dart';
 import 'package:mobileapp/screens/yearbook_browser.dart';
@@ -48,7 +48,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
       if (data['status'] == 'not_found' && mounted) {
         showDialog(
           context: context,
-          barrierDismissible: false,
+          barrierDismissible: false, // User MUST fill this
           builder: (context) => Dialog(
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
             child: const SizedBox(
