@@ -13,15 +13,21 @@ class Config {
   // ==================================================================
   //  API ENDPOINTS
   // ==================================================================
+
+  // --- Auth & Security (EXISTING) ---
   static const String loginUrl = '$baseUrl/student_login.php';
   static const String recoveryStatusUrl = '$baseUrl/check_recovery_status.php';
   static const String verifySecurityUrl = '$baseUrl/verify_security.php';
   static const String email2faUrl = '$baseUrl/setup_and_verify.php';
   static const String forgotPasswordUrl = '$baseUrl/forgot_password_api.php';
   
-  // --- NEW ENDPOINTS ---
+  // --- Home & Employment (EXISTING) ---
   static const String getFeedsUrl = '$baseUrl/get_home_feeds.php';
   static const String getIndustriesUrl = '$baseUrl/get_industries.php';
   static const String submitEmploymentUrl = '$baseUrl/submit_employment_history.php';
   static const String checkEmploymentStatusUrl = '$baseUrl/check_employment_status.php';
+
+  // --- Profile & Settings (NEW - Added for this update) ---
+  static const String getStudentProfileUrl = '$baseUrl/get_student_profile.php';
+  static const String updateSettingsUrl = '$baseUrl/update_settings.php';
 }

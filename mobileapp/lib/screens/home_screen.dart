@@ -1,5 +1,15 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
-import 'package:mobileapp/theme.dart';
+import 'package:http/http.dart' as http;
+import 'package:mobileapp/config.dart';
+import 'package:mobileapp/providers/theme_provider.dart';
+import 'package:mobileapp/providers/user_provider.dart';
+import 'package:mobileapp/screens/employment_history_screen.dart';
+import 'package:mobileapp/screens/login_screen.dart';
+import 'package:mobileapp/screens/settings_screen.dart';
+import 'package:mobileapp/screens/yearbook_browser.dart';
+import 'package:provider/provider.dart';
+import 'package:mobileapp/theme.dart'; // Ensure psuBlue/Gold are available
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -9,250 +19,244 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
-  int _selectedIndex = 0;
+  Map<String, dynamic>? _feedData;
+  bool _isLoadingFeeds = true;
 
-  // Mock data for the grid
-  final List<String> batchYears =
-      List.generate(11, (index) => (2024 - index).toString());
+  @override
+  void initState() {
+    super.initState();
+    // 1. Initialize User Data & Check Employment
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final userProvider = context.read<UserProvider>();
+      if (userProvider.studentId != null) {
+        userProvider.fetchUserProfile();
+        _checkEmploymentStatus(userProvider.studentId!);
+      }
+    });
+    // 2. Load Feeds
+    _fetchFeeds();
+  }
 
-  // Mock data for "Cream of the Top"
-  final List<Map<String, String>> topGraduates = [
-    {"name": "Juana Dela Cruz", "award": "Summa Cum Laude"},
-    {"name": "Pedro Penduko", "award": "Magna Cum Laude"},
-    {"name": "Maria Clara", "award": "Cum Laude"},
-  ];
+  Future<void> _checkEmploymentStatus(int studentId) async {
+    try {
+      // Uses the corrected variable name from Config
+      final response = await http.get(
+        Uri.parse("${Config.checkEmploymentStatusUrl}?student_id=$studentId"),
+      );
+      final data = json.decode(response.body);
+      
+      if (data['status'] == 'not_found') {
+        if (mounted) {
+          // Show Mandatory Form
+          showDialog(
+            context: context,
+            barrierDismissible: false, // User MUST fill this out
+            builder: (context) => Dialog(
+              insetPadding: const EdgeInsets.all(10),
+              child: ClipRRect(
+                 borderRadius: BorderRadius.circular(12),
+                 child: const SizedBox(
+                   height: 600,
+                   child: EmploymentHistoryScreen(isMandatory: true),
+                 ),
+              ),
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      print("Employment check failed: $e");
+    }
+  }
+
+  Future<void> _fetchFeeds() async {
+    try {
+      // Uses the corrected variable name from Config
+      final response = await http.get(Uri.parse(Config.getFeedsUrl));
+      if (response.statusCode == 200) {
+        setState(() {
+          _feedData = json.decode(response.body);
+          _isLoadingFeeds = false;
+        });
+      }
+    } catch (e) {
+      setState(() => _isLoadingFeeds = false);
+    }
+  }
+
+  void _logout() {
+    context.read<UserProvider>().logout();
+    Navigator.of(context).pushAndRemoveUntil(
+      MaterialPageRoute(builder: (_) => const UpgradedLoginScreen()),
+      (route) => false,
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
+    final themeProv = context.watch<ThemeProvider>();
+    
     return Scaffold(
       appBar: AppBar(
-        backgroundColor: Colors.white,
-        elevation: 1,
-        title: Image.asset(
-          'assets/images/psu_lion_logo.png', // Your lion logo
-          height: 40,
-        ),
+        title: const Text('PSU Yearbook'),
         centerTitle: true,
         actions: [
-          IconButton(
-            icon: const Icon(Icons.chat_bubble_outline, color: psuBlue),
-            onPressed: () {
-              // TODO: Navigate to Group Chat System
+          // Profile Menu
+          PopupMenuButton<String>(
+            icon: const Icon(Icons.account_circle, size: 30),
+            onSelected: (value) {
+              if (value == 'settings') {
+                Navigator.push(context, MaterialPageRoute(builder: (_) => const SettingsScreen()));
+              } else if (value == 'employment') {
+                Navigator.push(context, MaterialPageRoute(builder: (_) => const EmploymentHistoryScreen()));
+              } else if (value == 'logout') {
+                _logout();
+              }
             },
+            itemBuilder: (BuildContext context) => <PopupMenuEntry<String>>[
+               const PopupMenuItem(value: 'settings', child: Row(children: [Icon(Icons.settings, color: Colors.grey), SizedBox(width: 10), Text('Settings')])),
+               const PopupMenuItem(value: 'employment', child: Row(children: [Icon(Icons.work, color: Colors.grey), SizedBox(width: 10), Text('Employment History')])),
+               const PopupMenuDivider(),
+               const PopupMenuItem(value: 'logout', child: Row(children: [Icon(Icons.logout, color: Colors.red), SizedBox(width: 10), Text('Logout')])),
+            ],
           ),
         ],
       ),
-      body: _buildPageContent(),
-      bottomNavigationBar: BottomNavigationBar(
-        currentIndex: _selectedIndex,
-        onTap: (index) {
-          setState(() {
-            _selectedIndex = index;
-          });
-        },
-        selectedItemColor: psuBlue,
-        unselectedItemColor: Colors.black54,
-        items: const [
-          BottomNavigationBarItem(
-            icon: Icon(Icons.home),
-            label: 'Home',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.search),
-            label: 'Browse',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.person),
-            label: 'Profile',
-          ),
-        ],
-      ),
-    );
-  }
-
-  // Main content of the page
-  Widget _buildPageContent() {
-    // We can swap widgets here based on _selectedIndex, but for
-    // the mock-up, we'll just show the main page.
-    return ListView(
-      children: [
-        _buildOfficialMessageCard(),
-        _buildCreamOfTheTop(),
-        _buildBatchGrid(),
-      ],
-    );
-  }
-
-  // Module A: Official Message
-  Widget _buildOfficialMessageCard() {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      margin: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: psuBlue.withOpacity(0.1),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      child: const Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            "Message from the President",
-            style: TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.bold,
-              color: psuBlue,
-            ),
-          ),
-          SizedBox(height: 8),
-          Text(
-            "\"Congratulations, graduates! Your journey at PSU has prepared you to be the leaders of tomorrow. Go forth and make us proud!\"",
-            style: TextStyle(
-              fontSize: 15,
-              color: Colors.black87,
-              height: 1.4,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  // Module B: "Cream of the Top" Feature
-  Widget _buildCreamOfTheTop() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Padding(
-          padding: EdgeInsets.fromLTRB(16, 16, 16, 8),
-          child: Text(
-            "Cream of the Top (Batch 2024)",
-            style: TextStyle(
-              fontSize: 20,
-              fontWeight: FontWeight.bold,
-              color: psuBlue,
-            ),
-          ),
-        ),
-        SizedBox(
-          height: 120,
-          child: ListView.builder(
-            scrollDirection: Axis.horizontal,
-            padding: const EdgeInsets.symmetric(horizontal: 12),
-            itemCount: topGraduates.length,
-            itemBuilder: (context, index) {
-              final grad = topGraduates[index];
-              return Container(
-                width: 150,
-                margin: const EdgeInsets.all(4),
-                decoration: BoxDecoration(
-                  gradient: const LinearGradient(
-                    colors: [psuGolden, psuLightYellow],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                  ),
-                  borderRadius: BorderRadius.circular(12),
-                  boxShadow: [
-                    BoxShadow(
-                      color: psuGolden.withOpacity(0.3),
-                      blurRadius: 8,
-                    ),
-                  ],
-                ),
+      
+      drawer: Drawer(
+        child: ListView(
+          children: [
+            const DrawerHeader(
+              decoration: BoxDecoration(color: psuBlue),
+              child: Center(
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    const CircleAvatar(
-                      radius: 25,
-                      backgroundColor: Colors.white,
-                      child: Icon(Icons.star, color: psuGolden, size: 30),
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      grad['name']!,
-                      textAlign: TextAlign.center,
-                      style: const TextStyle(
-                        color: psuBlue,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    Text(
-                      grad['award']!,
-                      style: const TextStyle(
-                        color: Colors.black54,
-                        fontSize: 12,
-                      ),
-                    ),
+                     Icon(Icons.school, size: 50, color: Colors.white),
+                     SizedBox(height: 10),
+                     Text("Theme Settings", style: TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold)),
                   ],
                 ),
-              );
-            },
-          ),
+              ),
+            ),
+            ListTile(
+              leading: const Icon(Icons.light_mode),
+              title: const Text("Light Mode"),
+              onTap: () { themeProv.setMode(AppThemeMode.light); Navigator.pop(context); },
+              selected: themeProv.currentMode == AppThemeMode.light,
+            ),
+            ListTile(
+              leading: const Icon(Icons.dark_mode),
+              title: const Text("Dark Mode"),
+              onTap: () { themeProv.setMode(AppThemeMode.dark); Navigator.pop(context); },
+              selected: themeProv.currentMode == AppThemeMode.dark,
+            ),
+            ListTile(
+              leading: const Icon(Icons.star, color: Colors.amber),
+              title: const Text("PSU Theme"),
+              onTap: () { themeProv.setMode(AppThemeMode.psu); Navigator.pop(context); },
+              selected: themeProv.currentMode == AppThemeMode.psu,
+            ),
+          ],
         ),
-      ],
+      ),
+
+      body: _isLoadingFeeds
+          ? const Center(child: CircularProgressIndicator())
+          : RefreshIndicator(
+              onRefresh: _fetchFeeds,
+              child: SingleChildScrollView(
+                physics: const AlwaysScrollableScrollPhysics(),
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _buildSectionTitle("Announcements"),
+                    _buildHorizontalList(_feedData?['announcements'], 'message', Colors.orange.shade50),
+                    
+                    const SizedBox(height: 20),
+                    _buildSectionTitle("Upcoming Events"),
+                    _buildHorizontalList(_feedData?['events'], 'description', Colors.blue.shade50),
+                    
+                    const SizedBox(height: 20),
+                    _buildSectionTitle("Job Hirings"),
+                    _buildHorizontalList(_feedData?['jobs'], 'description', Colors.green.shade50),
+                    
+                    const SizedBox(height: 80), // Spacing for FAB
+                  ],
+                ),
+              ),
+            ),
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: () {
+          Navigator.push(context, MaterialPageRoute(builder: (_) => const YearbookBrowser()));
+        },
+        label: const Text("Browse Yearbook"),
+        icon: const Icon(Icons.auto_stories),
+        backgroundColor: Theme.of(context).primaryColor,
+        foregroundColor: Colors.white,
+      ),
     );
   }
 
-  // Module C: Batch Year Browsing (Instagram-style)
-  Widget _buildBatchGrid() {
+  Widget _buildSectionTitle(String title) {
     return Padding(
-      padding: const EdgeInsets.all(12),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text(
-            "Browse by Batch",
-            style: TextStyle(
-              fontSize: 20,
-              fontWeight: FontWeight.bold,
-              color: psuBlue,
+      padding: const EdgeInsets.only(bottom: 10),
+      child: Text(title, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+    );
+  }
+
+  Widget _buildHorizontalList(List<dynamic>? items, String subtitleKey, Color bgColor) {
+    if (items == null || items.isEmpty) {
+      return const Padding(
+        padding: EdgeInsets.all(8.0),
+        child: Text("No updates available."),
+      );
+    }
+
+    return SizedBox(
+      height: 160,
+      child: ListView.builder(
+        scrollDirection: Axis.horizontal,
+        itemCount: items.length,
+        itemBuilder: (context, index) {
+          final item = items[index];
+          return Container(
+            width: 250,
+            margin: const EdgeInsets.only(right: 10),
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: bgColor,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: Colors.black12),
             ),
-          ),
-          const SizedBox(height: 8),
-          GridView.builder(
-            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-              crossAxisCount: 3, // 3 columns like Instagram
-              crossAxisSpacing: 10,
-              mainAxisSpacing: 10,
-            ),
-            itemCount: batchYears.length,
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            itemBuilder: (context, index) {
-              return Container(
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(16),
-                  boxShadow: [
-                    BoxShadow(
-                      color: psuBlue.withOpacity(0.1),
-                      blurRadius: 10,
-                    ),
-                  ],
-                  // Placeholder for a cover photo
-                  border: Border.all(color: psuBlue.withOpacity(0.2)),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  item['title'] ?? 'No Title',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Colors.black87),
                 ),
-                child: Center(
+                const SizedBox(height: 5),
+                Text(
+                  item['date'] ?? '',
+                  style: const TextStyle(fontSize: 12, color: Colors.black54),
+                ),
+                const Divider(),
+                Expanded(
                   child: Text(
-                    "Batch\n${batchYears[index]}",
-                    textAlign: TextAlign.center,
-                    style: const TextStyle(
-                      fontSize: 20,
-                      fontWeight: FontWeight.bold,
-                      color: psuBlue,
-                    ),
+                    item[subtitleKey] ?? '',
+                    maxLines: 3,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(fontSize: 14, color: Colors.black87),
                   ),
                 ),
-              );
-            },
-          ),
-        ],
+              ],
+            ),
+          );
+        },
       ),
     );
   }

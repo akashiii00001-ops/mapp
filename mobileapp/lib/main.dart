@@ -1,13 +1,18 @@
 import 'package:flutter/material.dart';
 import 'package:mobileapp/providers/auth_provider.dart';
-import 'package:mobileapp/screens/splash_screen.dart'; 
-import 'package:mobileapp/theme.dart'; // This import is now correct
+import 'package:mobileapp/providers/theme_provider.dart';
+import 'package:mobileapp/providers/user_provider.dart';
+import 'package:mobileapp/screens/splash_screen.dart';
 import 'package:provider/provider.dart';
 
 void main() {
   runApp(
-    ChangeNotifierProvider(
-      create: (context) => AuthProvider(),
+    MultiProvider(
+      providers: [
+        ChangeNotifierProvider(create: (_) => AuthProvider()),
+        ChangeNotifierProvider(create: (_) => ThemeProvider()), 
+        ChangeNotifierProvider(create: (_) => UserProvider()), 
+      ],
       child: const MyApp(),
     ),
   );
@@ -18,11 +23,13 @@ class MyApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final themeProvider = context.watch<ThemeProvider>();
+
     return MaterialApp(
       title: 'PSU Digital Yearbook',
-      theme: buildTheme(), // <-- Removed (Brightness.dark)
+      theme: themeProvider.currentThemeData, 
       debugShowCheckedModeBanner: false,
-      home: const SplashScreen(), // Start with the Splash Screen
+      home: const SplashScreen(),
     );
   }
 }
