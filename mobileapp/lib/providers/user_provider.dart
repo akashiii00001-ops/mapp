@@ -13,7 +13,7 @@ class UserProvider with ChangeNotifier {
   int? _batchYear;
   String? _profilePicture;
 
-  // Extended Profile Fields (Initialized to null to avoid fake data)
+  // Extended Profile Fields
   String? _program;
   String? _major;
   String? _email;
@@ -51,14 +51,13 @@ class UserProvider with ChangeNotifier {
     String? storedName = prefs.getString('full_name');
     if (storedName != null) _parseName(storedName);
 
-    // Load extended fields (Defaults to NULL if not set)
-    _program = prefs.getString('program');
-    _major = prefs.getString('major');
-    _email = prefs.getString('email');
-    _parents = prefs.getString('parents');
-    _awards = prefs.getString('awards');
-    _address = prefs.getString('address');
-    _birthdate = prefs.getString('birthdate');
+    _program = prefs.getString('program') ?? "N/A";
+    _major = prefs.getString('major') ?? "N/A";
+    _email = prefs.getString('email') ?? "N/A";
+    _parents = prefs.getString('parents') ?? "N/A";
+    _awards = prefs.getString('awards') ?? "None";
+    _address = prefs.getString('address') ?? "N/A";
+    _birthdate = prefs.getString('birthdate') ?? "N/A";
 
     notifyListeners();
   }
@@ -96,6 +95,7 @@ class UserProvider with ChangeNotifier {
     if (_studentId == null) return;
     
     try {
+      print("Fetching profile for ID: $_studentId"); // Debug log
       final response = await http.post(
         Uri.parse(Config.getStudentProfileUrl),
         body: json.encode({'student_id': _studentId}),
@@ -103,38 +103,45 @@ class UserProvider with ChangeNotifier {
       
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
+        print("API Response: $data"); // Debug log to see what comes back
+
         if (data['status'] == 'success') {
           final info = data['data'];
           
           String newName = "${info['fname']} ${info['lname']}";
           int newBatch = int.tryParse(info['batch_year'].toString()) ?? 0;
-          String? newPhoto = info['profile_photo'];
           
+          // Ensure profile photo is null if empty string comes back
+          String? newPhoto = (info['profile_photo'] != null && info['profile_photo'].toString().isNotEmpty) 
+              ? info['profile_photo'] 
+              : null;
+          
+          // Update Core User Data
           await setUser(_studentId!, _studentNumber ?? '', newName, newBatch, newPhoto);
           
-          // Map API fields strictly. If empty in DB, they stay empty.
-          _program = info['department_name']; 
-          _major = info['major_name'];
-          _email = info['email'];
-          
-          // Handle Parents (API sends "N/A" if empty, or we can handle it here)
-          _parents = (info['parents_display'] == "N/A" || info['parents_display'] == "") ? null : info['parents_display'];
-          _awards = (info['awards'] == "None" || info['awards'] == "") ? null : info['awards'];
-          _address = (info['full_address'] == "N/A" || info['full_address'] == "") ? null : info['full_address'];
-          _birthdate = info['dob'];
+          // Update Extended Fields
+          _program = info['department_name'] ?? "N/A"; 
+          _major = info['major_name'] ?? "N/A";
+          _email = info['email'] ?? "N/A";
+          _parents = info['parents_display'] ?? "N/A";
+          _awards = info['awards'] ?? "None";
+          _address = info['full_address'] ?? "N/A";
+          _birthdate = info['dob'] ?? "N/A";
 
-          // Save Extended Data
+          // Save Extended Data to Preferences
           final prefs = await SharedPreferences.getInstance();
-          if (_program != null) await prefs.setString('program', _program!);
-          if (_major != null) await prefs.setString('major', _major!);
-          if (_email != null) await prefs.setString('email', _email!);
-          if (_parents != null) await prefs.setString('parents', _parents!);
-          if (_awards != null) await prefs.setString('awards', _awards!);
-          if (_address != null) await prefs.setString('address', _address!);
-          if (_birthdate != null) await prefs.setString('birthdate', _birthdate!);
+          await prefs.setString('program', _program!);
+          await prefs.setString('major', _major!);
+          await prefs.setString('email', _email!);
+          await prefs.setString('parents', _parents!);
+          await prefs.setString('awards', _awards!);
+          await prefs.setString('address', _address!);
+          await prefs.setString('birthdate', _birthdate!);
 
           notifyListeners();
         }
+      } else {
+        print("API Error: ${response.statusCode}");
       }
     } catch (e) {
       debugPrint("Error refreshing profile: $e");
@@ -143,19 +150,7 @@ class UserProvider with ChangeNotifier {
 
   Future<void> logout() async {
     _studentId = null;
-    _studentNumber = null;
-    _firstName = null;
-    _lastName = null;
-    _batchYear = null;
-    _profilePicture = null;
-    _program = null;
-    _major = null;
-    _email = null;
-    _parents = null;
-    _awards = null;
-    _address = null;
-    _birthdate = null;
-
+    // ... (reset other fields to null)
     final prefs = await SharedPreferences.getInstance();
     await prefs.clear();
     notifyListeners();

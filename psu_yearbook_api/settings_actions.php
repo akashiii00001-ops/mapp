@@ -33,10 +33,10 @@ function sendEmail($email, $subject, $body) {
         $mail->isSMTP();
         $mail->Host       = 'smtp.gmail.com';
         $mail->SMTPAuth   = true;
-        $mail->Username   = 'your_email@gmail.com'; 
-        $mail->Password   = 'your_app_password';    
-        $mail->SMTPSecure = PHPMailer::ENCRYPTION_STARTTLS;
-        $mail->Port       = 587;
+         $mail->Username   = 'alumni.management.system1@gmail.com';
+            $mail->Password   = 'cgra rahs cgpi zwjj'; 
+            $mail->SMTPSecure = PHPMailer::ENCRYPTION_STARTTLS;
+            $mail->Port       = 587;
 
         $mail->setFrom('admin@psu.edu.ph', 'PSU Yearbook Security');
         $mail->addAddress($email);

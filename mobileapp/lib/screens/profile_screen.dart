@@ -5,13 +5,34 @@ import 'package:mobileapp/providers/user_provider.dart';
 import 'package:mobileapp/widgets/shared_widgets.dart';
 import 'package:mobileapp/config.dart';
 
-class ProfileScreen extends StatelessWidget {
+class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
+
+  @override
+  State<ProfileScreen> createState() => _ProfileScreenState();
+}
+
+class _ProfileScreenState extends State<ProfileScreen> {
+  @override
+  void initState() {
+    super.initState();
+    // Force a refresh when the screen loads to get the latest data
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      Provider.of<UserProvider>(context, listen: false).refreshProfile();
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
     final user = Provider.of<UserProvider>(context);
     
+    // Construct the full image URL. 
+    // Ensure Config.profileImgUrl ends with a slash '/' in your config.dart
+    String? imageUrl;
+    if (user.profilePicture != null && user.profilePicture!.isNotEmpty) {
+      imageUrl = "${Config.profileImgUrl}${user.profilePicture}";
+    }
+
     return Scaffold(
       extendBodyBehindAppBar: true,
       appBar: AppBar(
@@ -19,106 +40,120 @@ class ProfileScreen extends StatelessWidget {
         elevation: 0,
         iconTheme: const IconThemeData(color: Colors.white), 
       ),
-      body: Container(
-        color: const Color(0xFFF8FAFC), 
-        child: SingleChildScrollView(
-          child: Column(
-            children: [
-              // HEADER
-              Stack(
-                clipBehavior: Clip.none,
-                alignment: Alignment.bottomCenter,
-                children: [
-                  Container(
-                    height: 220,
-                    width: double.infinity,
-                    decoration: const BoxDecoration(
-                      gradient: LinearGradient(
-                        colors: [Color(0xFF6366F1), Color(0xFFA855F7)],
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                      ),
-                      borderRadius: BorderRadius.vertical(bottom: Radius.circular(30)),
-                    ),
-                  ),
-                  Positioned(
-                    bottom: -60,
-                    child: Container(
-                      padding: const EdgeInsets.all(4),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        shape: BoxShape.circle,
-                        boxShadow: [
-                          BoxShadow(color: Colors.black.withValues(alpha: 0.1), blurRadius: 10, spreadRadius: 5)
-                        ],
-                      ),
-                      child: CircleAvatar(
-                        radius: 60,
-                        backgroundColor: Colors.grey.shade200,
-                        backgroundImage: (user.profilePicture != null && user.profilePicture!.isNotEmpty)
-                            ? NetworkImage("${Config.profileImgUrl}/${user.profilePicture}")
-                            : null,
-                        child: (user.profilePicture == null) 
-                            ? Icon(Icons.person, size: 60, color: Colors.grey.shade400) 
-                            : null,
+      // WRAP BODY IN REFRESH INDICATOR
+      body: RefreshIndicator(
+        onRefresh: () async {
+          await user.refreshProfile();
+        },
+        child: Container(
+          color: const Color(0xFFF8FAFC), 
+          height: double.infinity, // Ensure scroll view works
+          child: SingleChildScrollView(
+            physics: const AlwaysScrollableScrollPhysics(),
+            child: Column(
+              children: [
+                // HEADER
+                Stack(
+                  clipBehavior: Clip.none,
+                  alignment: Alignment.bottomCenter,
+                  children: [
+                    Container(
+                      height: 220,
+                      width: double.infinity,
+                      decoration: const BoxDecoration(
+                        gradient: LinearGradient(
+                          colors: [Color(0xFF6366F1), Color(0xFFA855F7)],
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                        ),
+                        borderRadius: BorderRadius.vertical(bottom: Radius.circular(30)),
                       ),
                     ),
-                  ),
+                    Positioned(
+                      bottom: -60,
+                      child: Container(
+                        padding: const EdgeInsets.all(4),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          shape: BoxShape.circle,
+                          boxShadow: [
+                            BoxShadow(color: Colors.black.withValues(alpha: 0.1), blurRadius: 10, spreadRadius: 5)
+                          ],
+                        ),
+                        child: CircleAvatar(
+                          radius: 60,
+                          backgroundColor: Colors.grey.shade200,
+                          // HANDLE IMAGE LOADING ERRORS
+                          backgroundImage: (imageUrl != null)
+                              ? NetworkImage(imageUrl)
+                              : null,
+                          onBackgroundImageError: (imageUrl != null) 
+                              ? (exception, stackTrace) {
+                                  print("Error loading image: $imageUrl");
+                                }
+                              : null,
+                          child: (imageUrl == null) 
+                              ? Icon(Icons.person, size: 60, color: Colors.grey.shade400) 
+                              : null,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                
+                const SizedBox(height: 70),
+
+                Text(
+                  "${user.firstName} ${user.lastName}",
+                  style: const TextStyle(color: Colors.black87, fontSize: 26, fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  "Batch ${user.batchYear} • ${user.program ?? 'N/A'}",
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(color: Colors.black54, fontSize: 14),
+                ),
+                
+                if (user.awards != null && user.awards != "None") ...[
+                  const SizedBox(height: 8),
+                  CustomBadge(text: user.awards!.split(',')[0], type: "warning"),
                 ],
-              ),
-              
-              const SizedBox(height: 70),
 
-              Text(
-                "${user.firstName} ${user.lastName}",
-                style: const TextStyle(color: Colors.black87, fontSize: 26, fontWeight: FontWeight.bold),
-              ),
-              const SizedBox(height: 4),
-              Text(
-                "Batch ${user.batchYear} • ${user.program ?? 'N/A'}",
-                textAlign: TextAlign.center,
-                style: const TextStyle(color: Colors.black54, fontSize: 14),
-              ),
-              
-              if (user.awards != null && user.awards != "None") ...[
-                const SizedBox(height: 8),
-                CustomBadge(text: user.awards!.split(',')[0], type: "warning"),
-              ],
+                const SizedBox(height: 30),
 
-              const SizedBox(height: 30),
-
-              // INFO GRID
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 20),
-                child: GlassContainer(
-                  isDark: false,
-                  padding: const EdgeInsets.all(20),
-                  borderRadius: 24,
-                  child: Column(
-                    children: [
-                      Row(
-                        children: [
-                          Expanded(child: _infoCard(FontAwesomeIcons.graduationCap, "MAJOR", user.major ?? "N/A", Colors.blue)),
-                          const SizedBox(width: 15),
-                          Expanded(child: _infoCard(FontAwesomeIcons.users, "PARENTS", user.parents ?? "N/A", Colors.green)),
-                        ],
-                      ),
-                      const SizedBox(height: 15),
-                      Row(
-                        children: [
-                          Expanded(child: _infoCard(FontAwesomeIcons.award, "AWARDS", user.awards ?? "None", Colors.orange)),
-                          const SizedBox(width: 15),
-                          Expanded(child: _infoCard(FontAwesomeIcons.locationDot, "ADDRESS", user.address ?? "N/A", Colors.red)),
-                        ],
-                      ),
-                      const SizedBox(height: 15),
-                      _infoCard(FontAwesomeIcons.cakeCandles, "BIRTHDATE", user.birthdate ?? "N/A", Colors.pink, isFullWidth: true),
-                    ],
+                // INFO GRID
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 20),
+                  child: GlassContainer(
+                    isDark: false,
+                    padding: const EdgeInsets.all(20),
+                    borderRadius: 24,
+                    child: Column(
+                      children: [
+                        Row(
+                          children: [
+                            Expanded(child: _infoCard(FontAwesomeIcons.graduationCap, "MAJOR", user.major ?? "N/A", Colors.blue)),
+                            const SizedBox(width: 15),
+                            Expanded(child: _infoCard(FontAwesomeIcons.users, "PARENTS", user.parents ?? "N/A", Colors.green)),
+                          ],
+                        ),
+                        const SizedBox(height: 15),
+                        Row(
+                          children: [
+                            Expanded(child: _infoCard(FontAwesomeIcons.award, "AWARDS", user.awards ?? "None", Colors.orange)),
+                            const SizedBox(width: 15),
+                            Expanded(child: _infoCard(FontAwesomeIcons.locationDot, "ADDRESS", user.address ?? "N/A", Colors.red)),
+                          ],
+                        ),
+                        const SizedBox(height: 15),
+                        _infoCard(FontAwesomeIcons.cakeCandles, "BIRTHDATE", user.birthdate ?? "N/A", Colors.pink, isFullWidth: true),
+                      ],
+                    ),
                   ),
                 ),
-              ),
-              const SizedBox(height: 40),
-            ],
+                const SizedBox(height: 40),
+              ],
+            ),
           ),
         ),
       ),
