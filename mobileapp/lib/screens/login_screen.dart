@@ -110,12 +110,14 @@ class _LoginScreenState extends State<LoginScreen> {
           batch = int.tryParse(responseBody['batch_year'].toString()) ?? 0;
         }
 
-        await Provider.of<UserProvider>(context, listen: false).setUser(
-          int.parse(responseBody['student_id'].toString()),
-          _studentNumberController.text,
-          fullName,
-          batch,
-        );
+        if (mounted) {
+          await Provider.of<UserProvider>(context, listen: false).setUser(
+            int.parse(responseBody['student_id'].toString()),
+            _studentNumberController.text,
+            fullName,
+            batch,
+          );
+        }
       }
 
       if (status == 'security_questions_required') {

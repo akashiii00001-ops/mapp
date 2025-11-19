@@ -1,50 +1,56 @@
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class ThemeProvider with ChangeNotifier {
-  ThemeMode _themeMode = ThemeMode.light;
-  String _currentThemeType = 'light'; // 'light', 'dark', 'psu'
+  // Modes: 'light', 'dark', 'gradient'
+  String _currentMode = 'light';
 
-  ThemeMode get themeMode => _themeMode;
-  String get currentThemeType => _currentThemeType;
+  String get currentMode => _currentMode;
 
-  void setTheme(String type) {
-    _currentThemeType = type;
-    if (type == 'dark') {
-      _themeMode = ThemeMode.dark;
-    } else {
-      _themeMode = ThemeMode.light;
-    }
+  ThemeProvider() {
+    _loadTheme();
+  }
+
+  Future<void> _loadTheme() async {
+    final prefs = await SharedPreferences.getInstance();
+    _currentMode = prefs.getString('theme_mode') ?? 'light';
     notifyListeners();
   }
 
   ThemeData getTheme() {
-    if (_currentThemeType == 'psu') {
-      return _psuTheme;
-    } else if (_currentThemeType == 'dark') {
-      return ThemeData.dark(useMaterial3: true);
+    if (_currentMode == 'light') {
+      return ThemeData.light().copyWith(
+        scaffoldBackgroundColor: const Color(0xFFF8FAFC),
+        primaryColor: Colors.blue,
+        // Add other light theme properties if needed
+      );
+    } else {
+      // Dark & Gradient share the same basic text styling (white text)
+      return ThemeData.dark().copyWith(
+        scaffoldBackgroundColor: const Color(0xFF0F172A),
+        primaryColor: Colors.indigo,
+      );
     }
-    return ThemeData.light(useMaterial3: true);
   }
 
-  // PSU Custom Theme (Blue & Yellow)
-  static final ThemeData _psuTheme = ThemeData(
-    useMaterial3: true,
-    brightness: Brightness.light,
-    primaryColor: const Color(0xFF0033A0), // PSU Blue
-    scaffoldBackgroundColor: const Color(0xFFFFFDD0), // Light Yellow (Cream)
-    appBarTheme: const AppBarTheme(
-      backgroundColor: Color(0xFF0033A0),
-      foregroundColor: Colors.white,
-    ),
-    floatingActionButtonTheme: const FloatingActionButtonThemeData(
-      backgroundColor: Color(0xFFFFD700), // PSU Gold/Yellow
-      foregroundColor: Colors.black,
-    ),
-    colorScheme: ColorScheme.fromSeed(
-      seedColor: const Color(0xFF0033A0),
-      primary: const Color(0xFF0033A0),
-      secondary: const Color(0xFFFFD700),
-      background: const Color(0xFFFFFDD0),
-    ),
-  );
+  // Used by the toggle button in Home Screen
+  void cycleTheme() {
+    if (_currentMode == 'light') {
+      setTheme('dark');
+    } else if (_currentMode == 'dark') {
+      setTheme('gradient');
+    } else {
+      setTheme('light');
+    }
+  }
+
+  // FIXED: Added this method for the Settings Screen dropdown
+  Future<void> setTheme(String mode) async {
+    _currentMode = mode;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('theme_mode', mode);
+    notifyListeners();
+  }
+  
+  bool get isDarkContent => _currentMode != 'light';
 }

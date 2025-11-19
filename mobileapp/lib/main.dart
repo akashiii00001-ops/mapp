@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:mobileapp/providers/auth_provider.dart';
-import 'package:mobileapp/providers/user_provider.dart'; // Ensure you have this
+import 'package:mobileapp/providers/user_provider.dart';
 import 'package:mobileapp/providers/theme_provider.dart';
 import 'package:mobileapp/screens/splash_screen.dart';
-import 'package:provider/provider.dart';
 
 void main() {
   runApp(
@@ -28,7 +29,9 @@ class MyApp extends StatelessWidget {
     return MaterialApp(
       title: 'PSU Digital Yearbook',
       debugShowCheckedModeBanner: false,
-      theme: themeProvider.getTheme(),
+      theme: themeProvider.getTheme().copyWith(
+        textTheme: GoogleFonts.poppinsTextTheme(themeProvider.getTheme().textTheme),
+      ),
       home: const SplashScreen(),
     );
   }

@@ -41,4 +41,7 @@ class Config {
   static const String verifySecurityUrl = '$baseUrl/verify_security.php';
   static const String email2faUrl = '$baseUrl/setup_and_verify.php';
   static const String forgotPasswordUrl = '$baseUrl/forgot_password_api.php';
+  
+  // NEW: Added for the in-app security flow (Change Pass/Email with OTP)
+  static const String settingsActionUrl = '$baseUrl/settings_actions.php';
 }

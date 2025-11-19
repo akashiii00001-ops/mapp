@@ -1,14 +1,11 @@
 import 'dart:convert';
-import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
-import 'package:mobileapp/config.dart';
-import 'package:mobileapp/providers/user_provider.dart';
-import 'package:mobileapp/screens/login_screen.dart';
-import 'package:mobileapp/screens/forgot_password_screen.dart'; 
 import 'package:provider/provider.dart';
-import 'package:font_awesome_flutter/font_awesome_flutter.dart';
-import 'package:flutter_animate/flutter_animate.dart';
+import 'package:mobileapp/providers/theme_provider.dart';
+import 'package:mobileapp/providers/user_provider.dart';
+import 'package:mobileapp/widgets/shared_widgets.dart';
+import 'package:mobileapp/config.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -18,194 +15,204 @@ class SettingsScreen extends StatefulWidget {
 }
 
 class _SettingsScreenState extends State<SettingsScreen> {
-  final _formKey = GlobalKey<FormState>();
-  final _currentPassController = TextEditingController();
-  final _newPassController = TextEditingController();
-  final _newEmailController = TextEditingController();
-  bool isLoading = false;
+  
+  // --- 1. CHANGE PASSWORD ---
+  void _showChangePasswordDialog(BuildContext context) {
+    final oldPassCtrl = TextEditingController();
+    final newPassCtrl = TextEditingController();
+    
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: const Color(0xFF1E293B),
+        title: const Text("Change Password", style: TextStyle(color: Colors.white)),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(controller: oldPassCtrl, obscureText: true, decoration: const InputDecoration(labelText: 'Old Password', filled: true, fillColor: Colors.black12, labelStyle: TextStyle(color: Colors.white70), enabledBorder: OutlineInputBorder(borderSide: BorderSide.none)), style: const TextStyle(color: Colors.white)),
+            const SizedBox(height: 10),
+            TextField(controller: newPassCtrl, obscureText: true, decoration: const InputDecoration(labelText: 'New Password', filled: true, fillColor: Colors.black12, labelStyle: TextStyle(color: Colors.white70), enabledBorder: OutlineInputBorder(borderSide: BorderSide.none)), style: const TextStyle(color: Colors.white)),
+          ],
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("Cancel", style: TextStyle(color: Colors.grey))),
+          TextButton(
+            onPressed: () async {
+              Navigator.pop(ctx);
+              await _performSecurityAction('change_password', {'old_password': oldPassCtrl.text, 'new_password': newPassCtrl.text});
+            },
+            child: const Text("Update", style: TextStyle(color: Colors.blue)),
+          ),
+        ],
+      ),
+    );
+  }
 
-  Future<void> _updateAccount() async {
-    if (!_formKey.currentState!.validate()) return;
-    setState(() => isLoading = true);
+  // --- 2. UPDATE EMAIL FLOW (SEQUENTIAL) ---
+  Future<void> _startEmailUpdateFlow() async {
+    // Step 1: Confirm and Send OTP to OLD Email
+    bool confirm = await showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: const Color(0xFF1E293B),
+        title: const Text("Update Email Address", style: TextStyle(color: Colors.white)),
+        content: const Text("We will send an OTP to your CURRENT email to verify it's you.", style: TextStyle(color: Colors.white70)),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text("Cancel", style: TextStyle(color: Colors.grey))),
+          TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text("Send OTP", style: TextStyle(color: Colors.blue))),
+        ],
+      ),
+    ) ?? false;
 
-    final userProvider = Provider.of<UserProvider>(context, listen: false);
-    final body = {
-      'student_id': userProvider.studentId,
-      'current_password': _currentPassController.text,
-      'new_email': _newEmailController.text.isNotEmpty ? _newEmailController.text : null,
-      'new_password': _newPassController.text.isNotEmpty ? _newPassController.text : null,
-    };
+    if (!confirm) return;
 
-    try {
-      final res = await http.post(Uri.parse(Config.updateSettingsUrl), body: json.encode(body), headers: {"Content-Type": "application/json"});
-      if (!mounted) return;
-      final result = json.decode(res.body);
-      
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text(result['message'] ?? "Unknown Error"),
-        backgroundColor: result['status'] == 'success' ? Colors.green : Colors.red,
-      ));
-      
-      if (result['status'] == 'success') {
-        _currentPassController.clear();
-        _newPassController.clear();
-        _newEmailController.clear();
-      }
-    } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Connection Error")));
-    } finally {
-      if (mounted) setState(() => isLoading = false);
+    bool otpSent = await _performSecurityAction('send_otp_current', {});
+    if (!otpSent || !mounted) return;
+
+    // Step 2: Verify OTP
+    String? otpCode = await _showInput(context, "Enter Verification Code", "6-Digit Code", isNumber: true);
+    if (otpCode == null || otpCode.isEmpty || !mounted) return;
+
+    bool verified = await _performSecurityAction('verify_otp', {'code': otpCode});
+    if (!verified || !mounted) return;
+
+    // Step 3: Enter NEW Email
+    String? newEmail = await _showInput(context, "Enter New Email", "new@email.com");
+    if (newEmail == null || newEmail.isEmpty || !mounted) return;
+
+    // Step 4: Send OTP to NEW Email (Optional verification step, or direct update)
+    // For simplicity per your request: Direct update after verifying old email logic
+    // OR strictly: Send OTP to new email. Let's do direct update as per "where do i change the mail" request.
+    await _performSecurityAction('update_email', {'code': otpCode, 'new_email': newEmail}); // Re-sending OTP code for backend validation context
+  }
+
+  // --- 3. FORGOT PASSWORD ---
+  Future<void> _forgotPasswordFlow() async {
+     bool confirm = await showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: const Color(0xFF1E293B),
+        title: const Text("Reset Password", style: TextStyle(color: Colors.white)),
+        content: const Text("We will send a temporary password or reset link to your registered email.", style: TextStyle(color: Colors.white70)),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text("Cancel", style: TextStyle(color: Colors.grey))),
+          TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text("Send Email", style: TextStyle(color: Colors.orange))),
+        ],
+      ),
+    ) ?? false;
+
+    if (confirm) {
+      await _performSecurityAction('forgot_password', {});
     }
   }
 
-  void _handleLogout() {
-    Provider.of<UserProvider>(context, listen: false).logout();
-    Navigator.of(context).pushAndRemoveUntil(MaterialPageRoute(builder: (_) => const LoginScreen()), (r) => false);
+  // Helper for inputs
+  Future<String?> _showInput(BuildContext context, String title, String hint, {bool isNumber = false}) {
+    final ctrl = TextEditingController();
+    return showDialog<String>(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: const Color(0xFF1E293B),
+        title: Text(title, style: const TextStyle(color: Colors.white)),
+        content: TextField(
+          controller: ctrl, 
+          keyboardType: isNumber ? TextInputType.number : TextInputType.emailAddress,
+          decoration: InputDecoration(labelText: hint, filled: true, fillColor: Colors.black12, labelStyle: const TextStyle(color: Colors.white70)), 
+          style: const TextStyle(color: Colors.white)
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, null), child: const Text("Cancel", style: TextStyle(color: Colors.grey))),
+          TextButton(onPressed: () => Navigator.pop(ctx, ctrl.text), child: const Text("Next", style: TextStyle(color: Colors.blue))),
+        ],
+      ),
+    );
+  }
+
+  Future<bool> _performSecurityAction(String action, Map<String, dynamic> extras) async {
+    final user = Provider.of<UserProvider>(context, listen: false);
+    final url = Uri.parse(Config.settingsActionUrl); 
+
+    try {
+      final body = {'action': action, 'student_id': user.studentId, ...extras};
+      final response = await http.post(url, body: json.encode(body));
+      final data = json.decode(response.body);
+
+      if (data['status'] == 'success') {
+        if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(data['message'] ?? 'Success')));
+        return true;
+      } else {
+        if (mounted) _showError(data['message']);
+        return false;
+      }
+    } catch (e) {
+      if (mounted) _showError("Connection Error: $e");
+      return false;
+    }
+  }
+
+  void _showError(String msg) {
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg), backgroundColor: Colors.red));
   }
 
   @override
   Widget build(BuildContext context) {
-    const Color bgDark = Color(0xFF0F172A);
+    final theme = Provider.of<ThemeProvider>(context);
+    final isDark = theme.isDarkContent;
 
     return Scaffold(
-      backgroundColor: bgDark,
       appBar: AppBar(
-        title: const Text("Settings", style: TextStyle(fontWeight: FontWeight.bold)),
+        title: Text("Settings", style: TextStyle(color: isDark ? Colors.white : Colors.black)),
         backgroundColor: Colors.transparent,
         elevation: 0,
-        centerTitle: true,
+        iconTheme: IconThemeData(color: isDark ? Colors.white : Colors.black),
       ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(20.0),
-        physics: const BouncingScrollPhysics(),
-        child: Form(
-          key: _formKey,
-          child: Column(
-            children: [
-              // --- SECURITY SECTION ---
-              _buildSectionCard(
-                title: "Security",
-                icon: FontAwesomeIcons.shieldHalved,
-                iconColor: Colors.orange,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.end,
-                  children: [
-                    _buildTextField("Current Password", _currentPassController, true, icon: Icons.lock_outline),
-                    const SizedBox(height: 8),
-                    GestureDetector(
-                      onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ForgotPasswordScreen())),
-                      child: const Text("Forgot Password?", style: TextStyle(color: Colors.blueAccent, fontSize: 12, fontWeight: FontWeight.bold)),
-                    ),
-                    const SizedBox(height: 16),
-                    _buildTextField("New Password", _newPassController, true, icon: Icons.key),
-                    const SizedBox(height: 16),
-                    _buildTextField("Confirm New Password", TextEditingController(), true, icon: Icons.check_circle_outline),
-                  ],
-                ),
-              ),
-
-              const SizedBox(height: 24),
-
-              // --- CONTACT SECTION ---
-              _buildSectionCard(
-                title: "Contact Info",
-                icon: FontAwesomeIcons.envelope,
-                iconColor: Colors.blue,
-                child: Column(
-                  children: [
-                     _buildTextField("Update Email Address", _newEmailController, false, icon: Icons.alternate_email),
-                  ],
-                ),
-              ),
-
-              const SizedBox(height: 30),
-
-              // --- ACTION BUTTONS ---
-              SizedBox(
-                width: double.infinity,
-                height: 55,
-                child: ElevatedButton(
-                  onPressed: isLoading ? null : _updateAccount,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.white,
-                    foregroundColor: bgDark,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                  ),
-                  child: isLoading ? const CircularProgressIndicator() : const Text("Save Changes", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-                ),
-              ),
-              
-              const SizedBox(height: 16),
-              
-              SizedBox(
-                width: double.infinity,
-                height: 55,
-                child: OutlinedButton.icon(
-                  onPressed: _handleLogout,
-                  icon: const Icon(Icons.logout, color: Colors.redAccent),
-                  label: const Text("Log Out", style: TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold)),
-                  style: OutlinedButton.styleFrom(
-                    side: BorderSide(color: Colors.redAccent.withOpacity(0.5)),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                  ),
-                ),
-              )
-            ],
+      extendBodyBehindAppBar: true,
+      body: GradientBackground(
+        themeMode: theme.currentMode,
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.only(top: 100, left: 20, right: 20),
+          child: GlassContainer(
+            isDark: isDark,
+            child: Column(
+              children: [
+                _sectionHeader("Security", Icons.security, Colors.orange, isDark),
+                const SizedBox(height: 16),
+                
+                _menuItem("Change Password", Icons.lock, isDark, onTap: () => _showChangePasswordDialog(context)),
+                const Divider(),
+                _menuItem("Update Email", Icons.email, isDark, onTap: _startEmailUpdateFlow),
+                const Divider(),
+                _menuItem("Forgot Password", Icons.help_outline, isDark, onTap: _forgotPasswordFlow),
+              ],
+            ),
           ),
         ),
       ),
     );
   }
 
-  Widget _buildSectionCard({required String title, required IconData icon, required Color iconColor, required Widget child}) {
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(24),
-      child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-        child: Container(
-          padding: const EdgeInsets.all(24),
-          decoration: BoxDecoration(
-            color: Colors.white.withOpacity(0.08),
-            borderRadius: BorderRadius.circular(24),
-            border: Border.all(color: Colors.white.withOpacity(0.1)),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(8),
-                    decoration: BoxDecoration(color: iconColor.withOpacity(0.2), borderRadius: BorderRadius.circular(8)),
-                    child: Icon(icon, color: iconColor, size: 18),
-                  ),
-                  const SizedBox(width: 12),
-                  Text(title, style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
-                ],
-              ),
-              const SizedBox(height: 20),
-              child,
-            ],
-          ),
+  Widget _sectionHeader(String title, IconData icon, Color color, bool isDark) {
+    return Row(
+      children: [
+        Container(
+          padding: const EdgeInsets.all(8),
+          decoration: BoxDecoration(color: color.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(8)),
+          child: Icon(icon, color: color, size: 20),
         ),
-      ),
-    ).animate().fadeIn().slideY(begin: 0.1, end: 0);
+        const SizedBox(width: 12),
+        Text(title, style: TextStyle(color: isDark ? Colors.white : Colors.black87, fontSize: 18, fontWeight: FontWeight.bold)),
+      ],
+    );
   }
 
-  Widget _buildTextField(String label, TextEditingController ctrl, bool isPass, {IconData? icon}) {
-    return TextFormField(
-      controller: ctrl,
-      obscureText: isPass,
-      style: const TextStyle(color: Colors.white),
-      decoration: InputDecoration(
-        labelText: label,
-        labelStyle: const TextStyle(color: Colors.white54),
-        prefixIcon: icon != null ? Icon(icon, color: Colors.white54) : null,
-        filled: true,
-        fillColor: Colors.black.withOpacity(0.2),
-        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
-        focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Colors.blueAccent)),
-      ),
+  Widget _menuItem(String title, IconData icon, bool isDark, {required VoidCallback onTap}) {
+    return ListTile(
+      contentPadding: EdgeInsets.zero,
+      leading: Icon(icon, color: isDark ? Colors.white70 : Colors.black54),
+      title: Text(title, style: TextStyle(color: isDark ? Colors.white : Colors.black87)),
+      trailing: const Icon(Icons.arrow_forward_ios, size: 16, color: Colors.grey),
+      onTap: onTap,
     );
   }
 }

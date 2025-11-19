@@ -1,15 +1,14 @@
 import 'dart:convert';
-import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
-import 'package:mobileapp/config.dart';
-import 'package:mobileapp/providers/user_provider.dart';
 import 'package:provider/provider.dart';
-import 'package:font_awesome_flutter/font_awesome_flutter.dart';
-import 'package:flutter_animate/flutter_animate.dart';
+import 'package:mobileapp/providers/theme_provider.dart';
+import 'package:mobileapp/providers/user_provider.dart';
+import 'package:mobileapp/widgets/shared_widgets.dart';
+import 'package:mobileapp/config.dart';
 
 class EmploymentHistoryScreen extends StatefulWidget {
-  final bool isForced; 
+  final bool isForced;
   const EmploymentHistoryScreen({super.key, this.isForced = false});
 
   @override
@@ -17,79 +16,83 @@ class EmploymentHistoryScreen extends StatefulWidget {
 }
 
 class _EmploymentHistoryScreenState extends State<EmploymentHistoryScreen> {
-  final _formKey = GlobalKey<FormState>();
+  String? status; // 'Employed', 'Unemployed', 'Rather Not Say'
+  final _jobTitleController = TextEditingController();
+  final _companyController = TextEditingController();
   
-  final List<String> statusOptions = ['Employed', 'Unemployed', 'Not Specified'];
-  String status = 'Employed'; 
+  // Maps Industry Name to ID based on your SQL Dump
+  final Map<String, int> industryMap = {
+    "Information Technology & Services": 1,
+    "Education": 2,
+    "Healthcare & Medical": 3,
+    "Business Process Outsourcing (BPO)": 4,
+    "Government & Public Sector": 5,
+    "Finance & Banking": 6,
+    "Hospitality & Tourism": 7,
+    "Retail & E-commerce": 8,
+    "Engineering & Construction": 9,
+    "Real Estate": 10,
+    "Manufacturing & Production": 11,
+    "Food & Beverage (F&B)": 12,
+    "Transportation & Logistics": 13,
+    "Telecommunications": 14,
+    "Media & Entertainment": 15,
+    "Legal Services": 16,
+    "Agriculture & Farming": 17,
+    "Non-Profit & Volunteering": 18,
+    "Automotive": 19,
+    "Human Resources & Staffing": 20,
+    "Other": 21
+  };
 
-  String? relevance = 'No';
-  String timeToFirstJob = 'Not Applicable';
-  
-  final TextEditingController jobController = TextEditingController();
-  final TextEditingController companyController = TextEditingController();
-  
-  List<dynamic> industries = [];
-  String? selectedIndustry;
+  String selectedIndustryName = "Information Technology & Services";
+  String relevantToCourse = "Yes";
+  String timeToFirstJob = "0-6 months"; // Default value
   bool isSubmitting = false;
-  bool isLoading = true;
 
   @override
-  void initState() {
-    super.initState();
-    _fetchIndustries();
+  void dispose() {
+    _jobTitleController.dispose();
+    _companyController.dispose();
+    super.dispose();
   }
 
-  Future<void> _fetchIndustries() async {
-    try {
-      final res = await http.get(Uri.parse(Config.getIndustriesUrl));
-      if (res.statusCode == 200) {
-        if (mounted) {
-          setState(() {
-            industries = json.decode(res.body);
-            isLoading = false;
-          });
-        }
-      }
-    } catch (e) {
-      if (mounted) setState(() => isLoading = false);
+  Future<void> _submit() async {
+    if (status == null) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Please select a status.")));
+      return;
     }
-  }
 
-  Future<void> _submitData() async {
-    if (!_formKey.currentState!.validate()) return;
     setState(() => isSubmitting = true);
-
-    final userProvider = Provider.of<UserProvider>(context, listen: false);
-    final studentId = userProvider.studentId;
-
-    final body = {
-      'student_id': studentId,
-      'status': status,
-      'job_title': status == 'Employed' ? jobController.text : '',
-      'company': status == 'Employed' ? companyController.text : '',
-      'industry_id': status == 'Employed' ? selectedIndustry : null,
-      'time_to_first_job': status == 'Employed' ? timeToFirstJob : 'Not Applicable',
-      'relevance': status == 'Employed' ? relevance : 'No'
-    };
-
+    
+    final user = Provider.of<UserProvider>(context, listen: false);
+    
     try {
-      final res = await http.post(
+      final response = await http.post(
         Uri.parse(Config.submitEmploymentUrl),
-        body: json.encode(body),
-        headers: {"Content-Type": "application/json"},
+        headers: {'Content-Type': 'application/json'},
+        body: json.encode({
+          'student_id': user.studentId,
+          'status': status,
+          'job_title': status == 'Employed' ? _jobTitleController.text : null,
+          'company': status == 'Employed' ? _companyController.text : null,
+          'industry_id': status == 'Employed' ? industryMap[selectedIndustryName] : null, 
+          'time_to_first_job': status == 'Employed' ? timeToFirstJob : 'Not Applicable',
+          'relevance': status == 'Employed' ? relevantToCourse : null
+        }),
       );
-      
-      if (!mounted) return;
 
-      final result = json.decode(res.body);
-      if (result['status'] == 'success') {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(backgroundColor: Colors.green, content: Text("Record updated successfully!")));
-        Navigator.pop(context); 
+      final respData = json.decode(response.body);
+
+      if (response.statusCode == 200 && respData['status'] == 'success') {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("History saved!")));
+        Navigator.pop(context);
       } else {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(backgroundColor: Colors.red, content: Text("Error: ${result['message']}")));
+        throw Exception(respData['message'] ?? "Unknown error");
       }
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Connection Error")));
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Error: ${e.toString()}")));
     } finally {
       if (mounted) setState(() => isSubmitting = false);
     }
@@ -97,206 +100,166 @@ class _EmploymentHistoryScreenState extends State<EmploymentHistoryScreen> {
 
   @override
   Widget build(BuildContext context) {
-    const Color bgDark = Color(0xFF0F172A);
-    
-    return PopScope(
-      canPop: !widget.isForced,
-      child: Scaffold(
-        backgroundColor: bgDark,
-        appBar: AppBar(
-          title: const Text("Employment Status", style: TextStyle(fontWeight: FontWeight.bold)),
-          backgroundColor: Colors.transparent,
-          elevation: 0,
-          centerTitle: true,
-          automaticallyImplyLeading: !widget.isForced,
-        ),
-        body: isLoading 
-          ? const Center(child: CircularProgressIndicator(color: Colors.blueAccent))
-          : SingleChildScrollView(
+    final theme = Provider.of<ThemeProvider>(context);
+    final isDark = theme.isDarkContent;
+
+    return Scaffold(
+      appBar: AppBar(
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        iconTheme: IconThemeData(color: isDark ? Colors.white : Colors.black),
+        title: Text("Employment History", style: TextStyle(color: isDark ? Colors.white : Colors.black)),
+      ),
+      extendBodyBehindAppBar: true,
+      body: GradientBackground(
+        themeMode: theme.currentMode,
+        child: Center(
+          child: SingleChildScrollView(
             padding: const EdgeInsets.all(20),
-            child: Form(
-              key: _formKey,
+            child: GlassContainer(
+              isDark: isDark,
               child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(24),
-                    child: BackdropFilter(
-                      filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-                      child: Container(
-                        padding: const EdgeInsets.all(24),
-                        decoration: BoxDecoration(
-                          color: Colors.white.withValues(alpha: 0.08),
-                          borderRadius: BorderRadius.circular(24),
-                          border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
-                        ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const Text("Current Status", style: TextStyle(color: Colors.white70, fontSize: 12, fontWeight: FontWeight.bold)),
-                            const SizedBox(height: 12),
-                            Row(
-                              children: statusOptions.map((s) {
-                                final isSelected = status == s;
-                                return Expanded(
-                                  child: GestureDetector(
-                                    onTap: () => setState(() => status = s),
-                                    child: AnimatedContainer(
-                                      duration: 200.ms,
-                                      margin: const EdgeInsets.symmetric(horizontal: 4),
-                                      padding: const EdgeInsets.symmetric(vertical: 12),
-                                      decoration: BoxDecoration(
-                                        color: isSelected ? Colors.blueAccent : Colors.white.withValues(alpha: 0.1),
-                                        borderRadius: BorderRadius.circular(12),
-                                        boxShadow: isSelected ? [BoxShadow(color: Colors.blueAccent.withValues(alpha: 0.4), blurRadius: 8)] : [],
-                                      ),
-                                      alignment: Alignment.center,
-                                      child: Text(
-                                        s,
-                                        style: TextStyle(
-                                          color: isSelected ? Colors.white : Colors.white70,
-                                          fontWeight: FontWeight.bold, 
-                                          fontSize: 12
-                                        ),
-                                      ),
-                                    ),
-                                  ),
-                                );
-                              }).toList(),
-                            ),
-
-                            const SizedBox(height: 24),
-                            
-                            if (status == 'Employed') ...[
-                              _buildGlassTextField("Job Title", jobController, FontAwesomeIcons.briefcase),
-                              const SizedBox(height: 16),
-                              _buildGlassTextField("Company Name", companyController, FontAwesomeIcons.building),
-                              const SizedBox(height: 16),
-                              
-                              _buildGlassDropdown(
-                                "Industry",
-                                selectedIndustry,
-                                industries.map<DropdownMenuItem<String>>((item) {
-                                  return DropdownMenuItem(
-                                    value: item['industry_id'].toString(),
-                                    child: Text(item['name'], style: const TextStyle(color: Colors.white)), 
-                                  );
-                                }).toList(),
-                                (val) => setState(() => selectedIndustry = val),
-                              ),
-
-                              const SizedBox(height: 24),
-                              const Text("Is this relevant to your course?", style: TextStyle(color: Colors.white70, fontSize: 12, fontWeight: FontWeight.bold)),
-                              const SizedBox(height: 8),
-                              Row(
-                                children: [
-                                  _buildRadioBtn("Yes"),
-                                  const SizedBox(width: 12),
-                                  _buildRadioBtn("No"),
-                                ],
-                              ),
-                              
-                              const SizedBox(height: 24),
-                              _buildGlassDropdown(
-                                "Time to first job",
-                                timeToFirstJob,
-                                ['0-6 months', '7-12 months', '1+ year', 'Not Applicable']
-                                    .map((e) => DropdownMenuItem(value: e, child: Text(e, style: const TextStyle(color: Colors.white))))
-                                    .toList(),
-                                (val) => setState(() => timeToFirstJob = val!),
-                              ),
-                            ]
-                          ],
+                  Text("Current Status", style: TextStyle(color: isDark ? Colors.white : Colors.black87, fontSize: 20, fontWeight: FontWeight.bold)),
+                  const SizedBox(height: 20),
+                  
+                  Row(
+                    children: ['Employed', 'Unemployed', 'Rather Not Say'].map((s) => Expanded(
+                      child: GestureDetector(
+                        onTap: () => setState(() => status = s),
+                        child: AnimatedContainer(
+                          duration: const Duration(milliseconds: 300),
+                          margin: const EdgeInsets.symmetric(horizontal: 4),
+                          padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 2),
+                          alignment: Alignment.center,
+                          decoration: BoxDecoration(
+                            color: status == s ? Colors.blue : (isDark ? Colors.white.withValues(alpha: 0.1) : Colors.black.withValues(alpha: 0.05)),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: status == s ? Colors.blue : Colors.transparent),
+                          ),
+                          child: Text(
+                            s, 
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              color: status == s ? Colors.white : (isDark ? Colors.white70 : Colors.black87), 
+                              fontWeight: FontWeight.bold, 
+                              fontSize: 11
+                            )
+                          ),
                         ),
                       ),
-                    ),
-                  ).animate().fadeIn().slideY(begin: 0.1, end: 0),
+                    )).toList(),
+                  ),
                   
-                  const SizedBox(height: 30),
+                  if (status == 'Employed') ...[
+                    const SizedBox(height: 24),
+                    _inputField("Job Title", _jobTitleController, isDark),
+                    _inputField("Company", _companyController, isDark),
+                    
+                    _dropdown("Industry", industryMap.keys.toList(), selectedIndustryName, (v) => setState(() => selectedIndustryName = v!), isDark),
+                    
+                    const SizedBox(height: 16),
+                    
+                    // Added Time to First Job Dropdown
+                    _dropdown("Time to First Job", ["0-6 months", "7-12 months", "1+ year", "Not Applicable"], timeToFirstJob, (v) => setState(() => timeToFirstJob = v!), isDark),
+
+                    const SizedBox(height: 20),
+                    Text("Relevant to Course?", style: TextStyle(color: isDark ? Colors.white70 : Colors.black54, fontSize: 12, fontWeight: FontWeight.bold)),
+                    const SizedBox(height: 8),
+                    Row(
+                      children: ["Yes", "No", "Somewhat"].map((val) => Expanded(
+                        child: GestureDetector(
+                          onTap: () => setState(() => relevantToCourse = val),
+                          child: Container(
+                            margin: const EdgeInsets.only(right: 8),
+                            padding: const EdgeInsets.symmetric(vertical: 10),
+                            decoration: BoxDecoration(
+                              border: Border.all(color: relevantToCourse == val ? Colors.blue : Colors.grey),
+                              borderRadius: BorderRadius.circular(8),
+                              color: relevantToCourse == val ? Colors.blue.withValues(alpha: 0.2) : Colors.transparent
+                            ),
+                            alignment: Alignment.center,
+                            child: Text(val, style: TextStyle(color: isDark ? Colors.white : Colors.black)),
+                          ),
+                        ),
+                      )).toList(),
+                    ),
+                  ],
+
+                  const SizedBox(height: 24),
                   SizedBox(
                     width: double.infinity,
-                    height: 55,
                     child: ElevatedButton(
-                      onPressed: isSubmitting ? null : _submitData,
+                      onPressed: isSubmitting ? null : _submit,
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.transparent,
-                        shadowColor: Colors.transparent,
+                        backgroundColor: Colors.blueAccent,
+                        padding: const EdgeInsets.symmetric(vertical: 16),
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                        padding: EdgeInsets.zero,
                       ),
-                      child: Ink(
-                        decoration: BoxDecoration(
-                          gradient: const LinearGradient(colors: [Colors.blueAccent, Colors.purpleAccent]),
-                          borderRadius: BorderRadius.circular(16),
-                        ),
-                        child: Container(
-                          alignment: Alignment.center,
-                          child: isSubmitting 
-                            ? const CircularProgressIndicator(color: Colors.white) 
-                            : const Text("Save History", style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
-                        ),
-                      ),
+                      child: isSubmitting 
+                        ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2)) 
+                        : const Text("Save History", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
                     ),
                   )
                 ],
               ),
             ),
           ),
-      ),
-    );
-  }
-
-  Widget _buildGlassTextField(String label, TextEditingController ctrl, IconData icon) {
-    return TextFormField(
-      controller: ctrl,
-      style: const TextStyle(color: Colors.white),
-      decoration: InputDecoration(
-        labelText: label,
-        labelStyle: const TextStyle(color: Colors.white54),
-        prefixIcon: Icon(icon, color: Colors.white54, size: 18),
-        filled: true,
-        fillColor: Colors.white.withValues(alpha: 0.05),
-        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
-        enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.1))),
-        focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Colors.blueAccent)),
-      ),
-      validator: (v) => v!.isEmpty ? "Required" : null,
-    );
-  }
-
-  Widget _buildGlassDropdown(String label, String? value, List<DropdownMenuItem<String>> items, Function(String?) onChanged) {
-    return DropdownButtonFormField<String>(
-      value: value,
-      dropdownColor: const Color(0xFF1E293B), 
-      style: const TextStyle(color: Colors.white),
-      decoration: InputDecoration(
-        labelText: label,
-        labelStyle: const TextStyle(color: Colors.white54),
-        filled: true,
-        fillColor: Colors.white.withValues(alpha: 0.05),
-        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
-        enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.1))),
-      ),
-      items: items,
-      onChanged: onChanged,
-      validator: (v) => status == 'Employed' && v == null ? "Required" : null,
-    );
-  }
-
-  Widget _buildRadioBtn(String val) {
-    bool isSelected = relevance == val;
-    return Expanded(
-      child: GestureDetector(
-        onTap: () => setState(() => relevance = val),
-        child: Container(
-          padding: const EdgeInsets.symmetric(vertical: 12),
-          decoration: BoxDecoration(
-            border: Border.all(color: isSelected ? Colors.blueAccent : Colors.white.withValues(alpha: 0.1)),
-            borderRadius: BorderRadius.circular(12),
-            color: isSelected ? Colors.blueAccent.withValues(alpha: 0.1) : Colors.transparent,
-          ),
-          alignment: Alignment.center,
-          child: Text(val, style: TextStyle(color: isSelected ? Colors.blueAccent : Colors.white70, fontWeight: FontWeight.bold)),
         ),
+      ),
+    );
+  }
+
+  Widget _inputField(String label, TextEditingController controller, bool isDark) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(label.toUpperCase(), style: TextStyle(color: isDark ? Colors.white54 : Colors.black45, fontSize: 10, fontWeight: FontWeight.bold)),
+          const SizedBox(height: 8),
+          TextFormField(
+            controller: controller,
+            style: TextStyle(color: isDark ? Colors.white : Colors.black),
+            decoration: InputDecoration(
+              filled: true,
+              fillColor: isDark ? Colors.black.withValues(alpha: 0.2) : Colors.grey.shade200,
+              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+              contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+            ),
+          )
+        ],
+      ),
+    );
+  }
+
+  Widget _dropdown(String label, List<String> items, String current, Function(String?) onChange, bool isDark) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(label.toUpperCase(), style: TextStyle(color: isDark ? Colors.white54 : Colors.black45, fontSize: 10, fontWeight: FontWeight.bold)),
+          const SizedBox(height: 8),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            decoration: BoxDecoration(
+              color: isDark ? Colors.black.withValues(alpha: 0.2) : Colors.grey.shade200,
+              borderRadius: BorderRadius.circular(12)
+            ),
+            child: DropdownButtonHideUnderline(
+              child: DropdownButton<String>(
+                value: current,
+                dropdownColor: isDark ? const Color(0xFF1E293B) : Colors.white,
+                isExpanded: true,
+                style: TextStyle(color: isDark ? Colors.white : Colors.black),
+                items: items.map((e) => DropdownMenuItem(value: e, child: Text(e))).toList(),
+                onChanged: onChange,
+              ),
+            ),
+          )
+        ],
       ),
     );
   }
