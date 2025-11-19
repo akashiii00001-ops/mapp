@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:mobileapp/config.dart';
 import 'package:mobileapp/providers/user_provider.dart';
+import 'package:mobileapp/screens/login_screen.dart'; 
 import 'package:provider/provider.dart';
 
 class SettingsScreen extends StatefulWidget {
@@ -26,8 +27,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final userProvider = Provider.of<UserProvider>(context, listen: false);
     final studentId = userProvider.studentId;
 
-    // Use the newly created update_settings.php (rename to update_account.php in your PHP folder if needed)
-    // For now, referencing the URL from Config
     final body = {
       'student_id': studentId,
       'current_password': _currentPassController.text,
@@ -64,11 +63,19 @@ class _SettingsScreenState extends State<SettingsScreen> {
     }
   }
 
+  void _handleLogout() {
+    Provider.of<UserProvider>(context, listen: false).logout();
+    Navigator.of(context).pushAndRemoveUntil(
+      MaterialPageRoute(builder: (context) => const LoginScreen()),
+      (route) => false,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: const Text("Account Settings")),
-      body: Padding(
+      body: SingleChildScrollView(
         padding: const EdgeInsets.all(20.0),
         child: Form(
           key: _formKey,
@@ -118,6 +125,17 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   child: isLoading ? const CircularProgressIndicator(color: Colors.white) : const Text("Save Changes"),
                 ),
               ),
+              const SizedBox(height: 40),
+              SizedBox(
+                width: double.infinity,
+                height: 50,
+                child: OutlinedButton.icon(
+                  onPressed: _handleLogout,
+                  icon: const Icon(Icons.logout, color: Colors.red),
+                  label: const Text("Logout", style: TextStyle(color: Colors.red)),
+                  style: OutlinedButton.styleFrom(side: const BorderSide(color: Colors.red)),
+                ),
+              )
             ],
           ),
         ),

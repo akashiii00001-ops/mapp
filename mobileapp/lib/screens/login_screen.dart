@@ -11,18 +11,18 @@ import 'package:provider/provider.dart';
 import 'package:mobileapp/theme.dart';
 import 'package:mobileapp/widgets/loading_dialog.dart';
 
-// NEW Config Import
+// NEW Config & Provider Imports
 import 'package:mobileapp/config.dart'; 
-
-// Imports for the NEW login flow
 import 'package:mobileapp/providers/auth_provider.dart';
+import 'package:mobileapp/providers/user_provider.dart'; // REQUIRED for saving user info
+
+// Screen Imports
+import 'package:mobileapp/screens/home_screen.dart';
 import 'package:mobileapp/screens/identity_verify_screen.dart';
 import 'package:mobileapp/screens/email_2fa_screen.dart';
 import 'package:mobileapp/screens/forgot_password_screen.dart';
 import 'package:mobileapp/screens/account_status_screen.dart';
 
-
-// RENAMED FROM UpgradedLoginScreen TO LoginScreen
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
 
@@ -33,8 +33,7 @@ class LoginScreen extends StatefulWidget {
 class _LoginScreenState extends State<LoginScreen> {
   // --- Variables ---
   bool _obscureText = true;
-  final TextEditingController _studentNumberController =
-      TextEditingController();
+  final TextEditingController _studentNumberController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
 
   // --- Variables for UI animations ---
@@ -79,7 +78,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
   //
   // --- --------------------------------- ---
-  // ---   NEW MODIFIED LOGIN LOGIC      ---
+  // ---   FIXED LOGIN LOGIC STARTS HERE   ---
   // --- --------------------------------- ---
   //
   Future<void> _handleLogin() async {
@@ -88,7 +87,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
     showLoadingDialog(context, 'Logging in...');
     
-    // [UPDATED] Use Config
+    // [FIX] Use the Config URL
     final url = Uri.parse(Config.loginUrl);
 
     try {
@@ -103,14 +102,45 @@ class _LoginScreenState extends State<LoginScreen> {
 
       if (mounted) Navigator.of(context).pop(); // Close loading dialog
 
+      if (response.statusCode != 200) {
+        _showErrorDialog('Server returned error ${response.statusCode}');
+        return;
+      }
+
       final responseBody = json.decode(response.body);
       final status = responseBody['status'];
       final message = responseBody['message'] ?? 'An error occurred';
       
+      if (status == 'error') {
+        if (mounted) _showErrorDialog(message);
+        return;
+      }
+
+      // [CRITICAL FIX] Save User Info to Provider so "Welcome" works
+      if (responseBody.containsKey('student_id')) {
+        String fullName = "Student";
+        if (responseBody['fname'] != null) {
+          fullName = "${responseBody['fname']} ${responseBody['lname']}";
+        }
+        
+        int batch = 0;
+        if (responseBody['batch_year'] != null) {
+          batch = int.tryParse(responseBody['batch_year'].toString()) ?? 0;
+        }
+
+        await Provider.of<UserProvider>(context, listen: false).setUser(
+          int.parse(responseBody['student_id'].toString()),
+          _studentNumberController.text,
+          fullName,
+          batch,
+        );
+      }
+
+      // [FIX] Navigation Logic based on Status
       if (status == 'security_questions_required') {
         final studentId = responseBody['student_id'];
         if (mounted) {
-          Navigator.of(context).push( // Use push, not pushReplacement
+          Navigator.of(context).push( 
             MaterialPageRoute(
               builder: (context) => IdentityVerifyScreen(
                 studentId: studentId,
@@ -122,7 +152,7 @@ class _LoginScreenState extends State<LoginScreen> {
         final studentId = responseBody['student_id'];
         final studentEmail = responseBody['student_email'];
         if (mounted) {
-          Navigator.of(context).push( // Use push
+          Navigator.of(context).push( 
             MaterialPageRoute(
               builder: (context) => Email2FAScreen(
                 studentId: studentId,
@@ -132,11 +162,16 @@ class _LoginScreenState extends State<LoginScreen> {
           );
         }
       } else {
-        if (mounted) _showErrorDialog(message);
+        // If status is success (or no security required), go to Home
+         if (mounted) {
+           Navigator.of(context).pushReplacement(
+            MaterialPageRoute(builder: (context) => const HomeScreen()),
+          );
+         }
       }
     } catch (e) {
       if (mounted) Navigator.of(context).pop();
-      _showErrorDialog('Could not connect to the server. Please check XAMPP. ${e.toString()}');
+      _showErrorDialog('Could not connect to the server. Please check Config URL. ${e.toString()}');
     }
   }
 
@@ -144,8 +179,7 @@ class _LoginScreenState extends State<LoginScreen> {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        // FIX: Updated withOpacity to withValues
-        backgroundColor: kPrimaryDark.withValues(alpha: 0.9),
+        backgroundColor: kPrimaryDark.withOpacity(0.9),
         title: const Text('Login Error', style: TextStyle(color: Colors.redAccent)),
         content: Text(message, style: const TextStyle(color: Colors.white)),
         actions: [
@@ -158,7 +192,7 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
   // --- --------------------------------- ---
-  // ---   END OF NEW LOGIN LOGIC        ---
+  // ---   END OF FIXED LOGIN LOGIC        ---
   // --- --------------------------------- ---
 
   //
@@ -177,7 +211,6 @@ class _LoginScreenState extends State<LoginScreen> {
 
     showLoadingDialog(context, 'Checking Status...');
     
-    // [UPDATED] Use Config
     final url = Uri.parse(Config.recoveryStatusUrl);
 
     try {
@@ -236,8 +269,7 @@ class _LoginScreenState extends State<LoginScreen> {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        // FIX: Updated withOpacity to withValues
-        backgroundColor: kPrimaryDark.withValues(alpha: 0.9),
+        backgroundColor: kPrimaryDark.withOpacity(0.9),
         title: Text(title, style: TextStyle(color: titleColor)),
         content: Text(message, style: const TextStyle(color: Colors.white)),
         actions: [
@@ -249,9 +281,6 @@ class _LoginScreenState extends State<LoginScreen> {
       ),
     );
   }
-  // --- ------------------------------------------ ---
-  // ---      END OF NEW NOTIFICATION LOGIC       ---
-  // --- ------------------------------------------ ---
 
   @override
   Widget build(BuildContext context) {
@@ -259,11 +288,13 @@ class _LoginScreenState extends State<LoginScreen> {
       body: Stack(
         children: [
           // --- Layer 1: Animated Lottie Background ---
+          // Make sure this asset exists, otherwise comment it out
           Lottie.asset(
             'assets/animations/particles_background.json',
             width: double.infinity,
             height: double.infinity,
             fit: BoxFit.cover,
+            errorBuilder: (context, error, stackTrace) => Container(color: kPrimaryDark),
           ),
 
           // --- Layer 2: Gradient Overlay ---
@@ -271,8 +302,7 @@ class _LoginScreenState extends State<LoginScreen> {
             decoration: BoxDecoration(
               gradient: LinearGradient(
                 colors: [
-                  // FIX: Updated withOpacity to withValues
-                  kPrimaryDark.withValues(alpha: 0.8),
+                  kPrimaryDark.withOpacity(0.8),
                   kPrimaryDark,
                 ],
                 begin: Alignment.topCenter,
@@ -288,7 +318,6 @@ class _LoginScreenState extends State<LoginScreen> {
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  // Your new "Account Status" page button
                   IconButton(
                     icon: const Icon(Icons.help_outline_rounded,
                         color: Colors.white70, size: 28),
@@ -363,7 +392,7 @@ class _LoginScreenState extends State<LoginScreen> {
                           icon: FontAwesomeIcons.lock,
                           isPassword: true,
                           textInputAction: TextInputAction.done,
-                          onSubmitted: (_) => _handleLogin(), // Allow login on "done"
+                          onSubmitted: (_) => _handleLogin(), 
                         ),
                         const SizedBox(height: 24),
                         
@@ -373,7 +402,6 @@ class _LoginScreenState extends State<LoginScreen> {
                         // --- Forgot Password Button ---
                         TextButton(
                           onPressed: () {
-                            // Navigate to the new flow
                             Navigator.of(context).push(MaterialPageRoute(
                               builder: (context) =>
                                   const ForgotPasswordScreen(),
@@ -398,7 +426,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
   //
   // --- --------------------- ---
-  // --- NEW ANIMATED WIDGETS ---
+  // --- ORIGINAL ANIMATED WIDGETS ---
   // --- --------------------- ---
   //
 
@@ -408,45 +436,40 @@ class _LoginScreenState extends State<LoginScreen> {
       onExit: (_) {
         setState(() {
           _isLogoHovering = false;
-          _logoOffset = Offset.zero; // Reset offset
+          _logoOffset = Offset.zero; 
         });
       },
       onHover: (event) {
-        // Calculate parallax movement (max 10px)
         final screenCenter = MediaQuery.of(context).size.width / 2;
         final moveX = (event.position.dx - screenCenter) / screenCenter * 10;
         setState(() {
-          _logoOffset = Offset(moveX, 0); // Only X-axis parallax
+          _logoOffset = Offset(moveX, 0); 
         });
       },
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 200),
         curve: Curves.easeOut,
-        // 1. Tilt and Parallax
         transform: Matrix4.identity()
-          ..setEntry(3, 2, 0.001) // 3D perspective
-          ..rotateY(_isLogoHovering ? 0.1 : 0) // Tilt
-          ..translate(_logoOffset.dx, _logoOffset.dy), // Parallax
+          ..setEntry(3, 2, 0.001) 
+          ..rotateY(_isLogoHovering ? 0.1 : 0) 
+          ..translate(_logoOffset.dx, _logoOffset.dy), 
         transformAlignment: Alignment.center,
-        // 2. Glow
         decoration: BoxDecoration(
           shape: BoxShape.circle,
           boxShadow: _isLogoHovering
               ? [
                   BoxShadow(
-                    // FIX: Updated withOpacity to withValues
-                    color: kPrimaryGold.withValues(alpha: 0.7),
+                    color: kPrimaryGold.withOpacity(0.7),
                     blurRadius: 30,
                     spreadRadius: 5,
                   ),
                 ]
               : [],
         ),
-        // Use a Hero widget for the transition from splash screen
         child: Hero(
-          tag: "lion_logo", // Same tag as in splash_screen.dart
+          tag: "lion_logo", 
           child: Image.asset(
-            'assets/images/psu_lion_logo.png', // Your existing logo
+            'assets/images/psu_lion_logo.png',
             height: 120,
             width: 120,
           ),
@@ -463,12 +486,10 @@ class _LoginScreenState extends State<LoginScreen> {
         child: Container(
           padding: const EdgeInsets.all(24),
           decoration: BoxDecoration(
-            // FIX: Updated withOpacity to withValues
-            color: Colors.white.withValues(alpha: 0.1),
+            color: Colors.white.withOpacity(0.1),
             borderRadius: BorderRadius.circular(20),
             border: Border.all(
-              // FIX: Updated withOpacity to withValues
-              color: Colors.white.withValues(alpha: 0.2),
+              color: Colors.white.withOpacity(0.2),
             ),
           ),
           child: child,
@@ -491,12 +512,10 @@ class _LoginScreenState extends State<LoginScreen> {
       duration: const Duration(milliseconds: 300),
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(30),
-        // 3. Focus Shadow
         boxShadow: isFocused
             ? [
                 BoxShadow(
-                  // FIX: Updated withOpacity to withValues
-                  color: kPrimaryGold.withValues(alpha: 0.5),
+                  color: kPrimaryGold.withOpacity(0.5),
                   blurRadius: 10,
                   spreadRadius: 2,
                 )
@@ -512,12 +531,9 @@ class _LoginScreenState extends State<LoginScreen> {
         onSubmitted: onSubmitted,
         decoration: InputDecoration(
           hintText: hint,
-          // FIX: Updated withOpacity to withValues
-          hintStyle: TextStyle(color: Colors.white.withValues(alpha: 0.7)),
+          hintStyle: TextStyle(color: Colors.white.withOpacity(0.7)),
           filled: true,
-          // FIX: Updated withOpacity to withValues
-          fillColor: Colors.black.withValues(alpha: 0.3),
-          // 1. Animated Icon
+          fillColor: Colors.black.withOpacity(0.3),
           prefixIcon: Padding(
             padding: const EdgeInsets.only(left: 20, right: 12),
             child: AnimatedTheme(
@@ -551,11 +567,9 @@ class _LoginScreenState extends State<LoginScreen> {
             borderRadius: BorderRadius.circular(30),
             borderSide: BorderSide.none,
           ),
-          // 2. Border Color Transition
           enabledBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(30),
-            // FIX: Updated withOpacity to withValues
-            borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.3)),
+            borderSide: BorderSide(color: Colors.white.withOpacity(0.3)),
           ),
           focusedBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(30),
@@ -572,14 +586,12 @@ class _LoginScreenState extends State<LoginScreen> {
       onExit: (_) => setState(() => _isLoginButtonHovering = false),
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 200),
-        // 3. Hover Glow
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(30),
           boxShadow: _isLoginButtonHovering
               ? [
                   BoxShadow(
-                    // FIX: Updated withOpacity to withValues
-                    color: kPrimaryGold.withValues(alpha: 0.5),
+                    color: kPrimaryGold.withOpacity(0.5),
                     blurRadius: 20,
                     spreadRadius: 0,
                   ),
@@ -590,13 +602,11 @@ class _LoginScreenState extends State<LoginScreen> {
           color: kPrimaryGold,
           borderRadius: BorderRadius.circular(30),
           child: InkWell(
-            // 1. Ripple
             borderRadius: BorderRadius.circular(30),
             onTap: () {
-              HapticFeedback.lightImpact(); // Haptic feedback
-              _handleLogin(); // Your existing logic
+              HapticFeedback.lightImpact();
+              _handleLogin(); 
             },
-            // 2. Scale Animation (via hover state)
             child: AnimatedContainer(
               duration: const Duration(milliseconds: 200),
               padding: const EdgeInsets.symmetric(vertical: 16),

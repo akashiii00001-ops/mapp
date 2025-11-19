@@ -1,14 +1,13 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
+import 'package:provider/provider.dart';
 import 'package:mobileapp/config.dart';
-import 'package:mobileapp/providers/auth_provider.dart';
-import 'package:mobileapp/providers/theme_provider.dart';
 import 'package:mobileapp/providers/user_provider.dart';
 import 'package:mobileapp/screens/login_screen.dart';
 import 'package:mobileapp/screens/settings_screen.dart';
-import 'package:mobileapp/widgets/employment_modal.dart';
-import 'package:provider/provider.dart';
+import 'package:mobileapp/screens/employment_history_screen.dart';
+import 'package:mobileapp/screens/profile_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -20,16 +19,21 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   Map<String, dynamic> feedData = {'announcements': [], 'events': [], 'jobs': []};
   bool isLoading = true;
-  // Default to true to ensure we check; logic will handle showing only if needed
-  bool hasCheckedEmployment = false; 
+  bool hasCheckedEmployment = false;
 
   @override
   void initState() {
     super.initState();
     _fetchFeedData();
     
-    // Check employment status immediately after build
+    // Check employment status once the widget is built
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      // If name is missing, try to fetch it
+      final user = Provider.of<UserProvider>(context, listen: false);
+      if (user.fullName == null) {
+        user.refreshProfile();
+      }
+
       if (!hasCheckedEmployment) {
         _checkEmploymentStatus();
       }
@@ -38,7 +42,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Future<void> _fetchFeedData() async {
     try {
-      final response = await http.get(Uri.parse("${Config.apiUrl}/get_home_data.php"));
+      final response = await http.get(Uri.parse(Config.getHomeDataUrl));
       if (response.statusCode == 200) {
         if (mounted) {
           setState(() {
@@ -68,10 +72,26 @@ class _HomeScreenState extends State<HomeScreen> {
         final data = json.decode(response.body);
         if (data['status'] == 'not_found') {
           if (!mounted) return;
+          // Show Dialog forcing them to update
           showDialog(
             context: context,
             barrierDismissible: false,
-            builder: (context) => EmploymentModal(studentId: studentId.toString()),
+            builder: (context) => AlertDialog(
+              title: const Text("Action Required"),
+              content: const Text("Please update your employment history to proceed."),
+              actions: [
+                TextButton(
+                  onPressed: () {
+                    Navigator.pop(context);
+                    Navigator.push(
+                      context, 
+                      MaterialPageRoute(builder: (_) => const EmploymentHistoryScreen(isForced: true))
+                    );
+                  },
+                  child: const Text("Update Now"),
+                )
+              ],
+            ),
           );
         }
       }
@@ -83,10 +103,8 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
-  void _handleLogout(BuildContext context) {
-    Provider.of<AuthProvider>(context, listen: false).logout();
+  void _handleLogout() {
     Provider.of<UserProvider>(context, listen: false).logout();
-    
     Navigator.of(context).pushAndRemoveUntil(
       MaterialPageRoute(builder: (context) => const LoginScreen()),
       (route) => false,
@@ -95,78 +113,66 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final themeProvider = Provider.of<ThemeProvider>(context);
     final userProvider = Provider.of<UserProvider>(context);
-    final isPsuTheme = themeProvider.currentThemeType == 'psu';
-
+    
     return Scaffold(
-      backgroundColor: isPsuTheme ? const Color(0xFFFFFDD0) : const Color(0xFFF0F2F5), // FB-like gray background
+      backgroundColor: Colors.grey[50],
       appBar: AppBar(
-        backgroundColor: isPsuTheme ? const Color(0xFF0033A0) : Colors.white,
-        elevation: isPsuTheme ? 4 : 1,
-        title: Text(
-          "PSU Yearbook", 
-          style: TextStyle(
-            fontWeight: FontWeight.bold, 
-            color: isPsuTheme ? Colors.white : const Color(0xFF1877F2), // FB Blue
-            fontSize: 24
-          )
+        backgroundColor: Colors.white,
+        elevation: 0,
+        titleSpacing: 15,
+        title: Row(
+          children: [
+            // Make sure you have this asset
+            Image.asset('assets/images/psu_lion_logo.png', height: 35), 
+            const SizedBox(width: 10),
+            const Text(
+              "PSU Yearbook",
+              style: TextStyle(color: Color(0xFF0033A0), fontWeight: FontWeight.bold, fontSize: 20),
+            ),
+          ],
         ),
         actions: [
-          // Light Bulb Icon for Theme Toggle
-          IconButton(
-            icon: Icon(
-              isPsuTheme ? Icons.lightbulb : Icons.lightbulb_outline, 
-              color: isPsuTheme ? Colors.yellowAccent : Colors.black87
-            ),
-            tooltip: "Switch Theme",
-            onPressed: () {
-              // Toggle between 'psu' and 'light' (FB style)
-              if (isPsuTheme) {
-                themeProvider.setTheme('light');
-              } else {
-                themeProvider.setTheme('psu');
-              }
-            },
-          ),
           PopupMenuButton<String>(
-            icon: Icon(Icons.account_circle, size: 30, color: isPsuTheme ? Colors.white : Colors.black87),
-            color: Colors.white,
+            offset: const Offset(0, 50),
+            icon: const Icon(Icons.account_circle, color: Colors.black87, size: 32),
             onSelected: (value) {
-              if (value == 'settings') {
-                 Navigator.push(context, MaterialPageRoute(builder: (_) => const SettingsScreen()));
-              } else if (value == 'logout') {
-                _handleLogout(context);
+              switch (value) {
+                case 'profile':
+                  Navigator.push(context, MaterialPageRoute(builder: (_) => const ProfileScreen()));
+                  break;
+                case 'employment':
+                  Navigator.push(context, MaterialPageRoute(builder: (_) => const EmploymentHistoryScreen()));
+                  break;
+                case 'settings':
+                  Navigator.push(context, MaterialPageRoute(builder: (_) => const SettingsScreen()));
+                  break;
+                case 'logout':
+                  _handleLogout();
+                  break;
               }
             },
             itemBuilder: (BuildContext context) {
               return [
-                 PopupMenuItem(
-                  value: 'header',
+                PopupMenuItem(
                   enabled: false,
-                  child: Text("Hi, ${userProvider.fullName ?? 'Student'}", style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.black)),
-                ),
-                const PopupMenuItem(
-                  value: 'history',
-                  child: Row(
-                    children: [Icon(Icons.work_history, color: Colors.grey), SizedBox(width: 8), Text("Employment History")],
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text("Hi, ${userProvider.fullName ?? 'Student'}", 
+                        style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.black)),
+                      const Divider(),
+                    ],
                   ),
                 ),
-                const PopupMenuItem(
-                  value: 'settings',
-                  child: Row(
-                    children: [Icon(Icons.settings, color: Colors.grey), SizedBox(width: 8), Text("Settings")],
-                  ),
-                ),
-                const PopupMenuItem(
-                  value: 'logout',
-                  child: Row(
-                    children: [Icon(Icons.logout, color: Colors.red), SizedBox(width: 8), Text("Logout")],
-                  ),
-                ),
+                const PopupMenuItem(value: 'profile', child: Row(children: [Icon(Icons.person, color: Colors.grey), SizedBox(width: 8), Text("My Profile")])),
+                const PopupMenuItem(value: 'employment', child: Row(children: [Icon(Icons.work, color: Colors.grey), SizedBox(width: 8), Text("Employment History")])),
+                const PopupMenuItem(value: 'settings', child: Row(children: [Icon(Icons.settings, color: Colors.grey), SizedBox(width: 8), Text("Settings")])),
+                const PopupMenuItem(value: 'logout', child: Row(children: [Icon(Icons.logout, color: Colors.red), SizedBox(width: 8), Text("Logout")])),
               ];
             },
           ),
+          const SizedBox(width: 10),
         ],
       ),
       body: isLoading
@@ -175,48 +181,64 @@ class _HomeScreenState extends State<HomeScreen> {
               onRefresh: _fetchFeedData,
               child: SingleChildScrollView(
                 physics: const AlwaysScrollableScrollPhysics(),
+                padding: const EdgeInsets.only(bottom: 50),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // 1. Announcements Carousel
-                    _buildSectionTitle("Announcements", Icons.campaign, Colors.orange),
+                    // Welcome Header
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.fromLTRB(20, 10, 20, 25),
+                      decoration: const BoxDecoration(
+                        gradient: LinearGradient(
+                          colors: [Color(0xFF0033A0), Color(0xFF001F5F)],
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                        ),
+                        borderRadius: BorderRadius.vertical(bottom: Radius.circular(30)),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text("Welcome back,", style: TextStyle(color: Colors.white70, fontSize: 14)),
+                          const SizedBox(height: 5),
+                          Text(
+                            userProvider.fullName ?? "Alumni", 
+                            style: const TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold)
+                          ),
+                          const SizedBox(height: 5),
+                          Text("Batch ${userProvider.batchYear ?? '...'}", style: const TextStyle(color: Color(0xFFFFD700), fontWeight: FontWeight.w500)),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 20),
+
+                    // 1. Announcements
+                    _buildSectionHeader("Announcements", Icons.campaign, Colors.orange),
                     _buildCarousel(feedData['announcements'], "announcements"),
 
-                    // 2. Events Carousel
-                    _buildSectionTitle("Upcoming Events", Icons.event, Colors.blue),
+                    // 2. Events
+                    _buildSectionHeader("Upcoming Events", Icons.event, Colors.blue),
                     _buildCarousel(feedData['events'], "events"),
 
-                    // 3. Job Hiring Carousel
-                    _buildSectionTitle("Job Hiring", Icons.work, Colors.green),
+                    // 3. Jobs
+                    _buildSectionHeader("Job Hiring", Icons.work, Colors.green),
                     _buildCarousel(feedData['jobs'], "jobs"),
-                    
-                    const SizedBox(height: 80), // Space for FAB
                   ],
                 ),
               ),
             ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: () {
-           ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Yearbook Feature Coming Soon!")));
-        },
-        backgroundColor: isPsuTheme ? const Color(0xFFFFD700) : const Color(0xFF1877F2),
-        icon: Icon(Icons.auto_stories, color: isPsuTheme ? Colors.black : Colors.white),
-        label: Text("My Yearbook", style: TextStyle(color: isPsuTheme ? Colors.black : Colors.white)),
-      ),
     );
   }
 
-  Widget _buildSectionTitle(String title, IconData icon, Color color) {
+  Widget _buildSectionHeader(String title, IconData icon, Color color) {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 20, 16, 10),
+      padding: const EdgeInsets.fromLTRB(20, 15, 20, 10),
       child: Row(
         children: [
-          Icon(icon, color: color, size: 24),
-          const SizedBox(width: 8),
-          Text(
-            title,
-            style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.black87),
-          ),
+          Icon(icon, color: color, size: 22),
+          const SizedBox(width: 10),
+          Text(title, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.black87)),
         ],
       ),
     );
@@ -225,67 +247,61 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget _buildCarousel(List<dynamic>? items, String type) {
     if (items == null || items.isEmpty) {
       return Container(
-        height: 150,
-        margin: const EdgeInsets.symmetric(horizontal: 16),
+        margin: const EdgeInsets.symmetric(horizontal: 20, vertical: 5),
+        height: 100,
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: Colors.white, 
           borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: Colors.grey.shade300),
+          border: Border.all(color: Colors.grey.shade200)
         ),
-        child: const Center(child: Text("No updates available.", style: TextStyle(color: Colors.grey))),
+        child: const Center(child: Text("No updates currently available.", style: TextStyle(color: Colors.grey))),
       );
     }
 
     return SizedBox(
-      height: 260, // Height for the carousel
+      height: 250,
       child: ListView.builder(
         scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.symmetric(horizontal: 12),
+        padding: const EdgeInsets.symmetric(horizontal: 15),
         itemCount: items.length,
         itemBuilder: (context, index) {
-          final item = items[index];
-          return _buildCarouselCard(item, type);
+          return _buildCard(items[index], type);
         },
       ),
     );
   }
 
-  Widget _buildCarouselCard(Map<String, dynamic> item, String type) {
+  Widget _buildCard(Map<String, dynamic> item, String type) {
     String title = item['title'] ?? item['job_title'] ?? "No Title";
     String subtitle = item['message'] ?? item['description'] ?? item['company_name'] ?? "";
     String? photoPath = item['photo_path'];
     
-    // Construct Image URL
+    // Correct URL construction based on Config
     String imageUrl = "";
     if (photoPath != null && photoPath.isNotEmpty) {
-      imageUrl = "${Config.apiUrl}/$photoPath"; 
+      if (type == 'announcements') imageUrl = "${Config.announcementImgUrl}/$photoPath";
+      else if (type == 'events') imageUrl = "${Config.eventImgUrl}/$photoPath";
+      else if (type == 'jobs') imageUrl = "${Config.jobImgUrl}/$photoPath";
     }
 
     return Container(
-      width: 280, // Width of each card
-      margin: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+      width: 260,
+      margin: const EdgeInsets.all(8),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(15),
-        boxShadow: [
-          BoxShadow(
-            // Fix for deprecated withOpacity
-            color: Colors.black.withValues(alpha: 0.08),
-            blurRadius: 8,
-            offset: const Offset(0, 4),
-          )
-        ],
+        boxShadow: [BoxShadow(color: Colors.grey.withOpacity(0.15), blurRadius: 8, offset: const Offset(0, 4))],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Image Header
+          // Image
           ClipRRect(
             borderRadius: const BorderRadius.vertical(top: Radius.circular(15)),
             child: Container(
-              height: 140,
+              height: 130,
               width: double.infinity,
-              color: Colors.grey.shade200,
+              color: Colors.grey.shade100,
               child: imageUrl.isNotEmpty
                   ? Image.network(
                       imageUrl,
@@ -294,51 +310,19 @@ class _HomeScreenState extends State<HomeScreen> {
                         return const Center(child: Icon(Icons.broken_image, color: Colors.grey));
                       },
                     )
-                  : Center(
-                      child: Icon(
-                        type == 'jobs' ? Icons.work : (type == 'events' ? Icons.event : Icons.campaign),
-                        size: 40, 
-                        color: Colors.grey.shade400
-                      )
-                    ),
+                  : Center(child: Icon(type == 'jobs' ? Icons.work : Icons.event, size: 40, color: Colors.grey.shade300)),
             ),
           ),
-          // Text Content
+          // Content
           Expanded(
             child: Padding(
               padding: const EdgeInsets.all(12),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    title,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.black87),
-                  ),
+                  Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
                   const SizedBox(height: 4),
-                  Text(
-                    subtitle,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(fontSize: 13, color: Colors.grey.shade600),
-                  ),
-                  const Spacer(),
-                  // "See More" fake button
-                  Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.symmetric(vertical: 6),
-                    decoration: BoxDecoration(
-                      color: Colors.blue.shade50,
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Center(
-                      child: Text(
-                        "See Details", 
-                        style: TextStyle(color: Colors.blue.shade700, fontWeight: FontWeight.w600, fontSize: 12),
-                      ),
-                    ),
-                  )
+                  Text(subtitle, maxLines: 2, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 12, color: Colors.grey.shade600)),
                 ],
               ),
             ),
