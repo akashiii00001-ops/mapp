@@ -1,57 +1,56 @@
-import 'dart:convert';
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
-import 'package:mobileapp/config.dart';
+import 'package:shared_preferences/shared_preferences.dart'; // Added Import
 
-class UserProvider extends ChangeNotifier {
+class UserProvider with ChangeNotifier {
   int? _studentId;
+  String? _studentNumber;
   String? _fullName;
-  String? _email;
-  String? _batchYear;
-  String? _profilePhoto;
+  int? _batchYear; // Added
 
   int? get studentId => _studentId;
+  String? get studentNumber => _studentNumber;
   String? get fullName => _fullName;
-  String? get email => _email;
-  String? get batchYear => _batchYear;
+  int? get batchYear => _batchYear; // Added Getter
 
-  void setUser(int id) {
-    _studentId = id;
-    fetchUserProfile();
+  // Load user data from storage on app start
+  Future<void> loadUser() async {
+    final prefs = await SharedPreferences.getInstance();
+    _studentId = prefs.getInt('student_id');
+    _studentNumber = prefs.getString('student_number');
+    _fullName = prefs.getString('full_name');
+    _batchYear = prefs.getInt('batch_year'); // Load batch
     notifyListeners();
   }
 
-  Future<void> fetchUserProfile() async {
-    if (_studentId == null) return;
+  // Save user data after login
+  Future<void> setUser(int id, String number, String name, int batch) async {
+    _studentId = id;
+    _studentNumber = number;
+    _fullName = name;
+    _batchYear = batch;
     
-    try {
-      final response = await http.post(
-        Uri.parse(Config.getStudentProfileUrl),
-        headers: {'Content-Type': 'application/json'},
-        body: json.encode({'student_id': _studentId}),
-      );
-
-      if (response.statusCode == 200) {
-        final data = json.decode(response.body);
-        if (data['status'] == 'success') {
-          final info = data['data'];
-          _fullName = "${info['fname']} ${info['lname']}";
-          _email = info['email'];
-          _batchYear = info['batch_year'].toString();
-          _profilePhoto = info['profile_photo'];
-          notifyListeners();
-        }
-      }
-    } catch (e) {
-      print("Error fetching profile: $e");
-    }
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setInt('student_id', id);
+    await prefs.setString('student_number', number);
+    await prefs.setString('full_name', name);
+    await prefs.setInt('batch_year', batch);
+    
+    notifyListeners();
   }
   
-  void logout() {
+  Future<void> fetchUserProfile() async {
+    notifyListeners();
+  }
+
+  Future<void> logout() async {
     _studentId = null;
+    _studentNumber = null;
     _fullName = null;
-    _email = null;
     _batchYear = null;
+
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.clear();
+    
     notifyListeners();
   }
 }
