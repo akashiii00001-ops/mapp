@@ -1,9 +1,0 @@
-# 1. Ignore EVERYTHING in this directory by default
-*
-
-# 2. Add EXCEPTIONS (The folders you WANT to track)
-!psu_yearbook_api/
-!mobileapp/
-
-# EXCEPTION: Ensure Git tracks the .gitignore file itself
-!.gitignore
