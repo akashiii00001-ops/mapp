@@ -22,7 +22,7 @@ class _SplashScreenState extends State<SplashScreen> {
     if (mounted) {
       Navigator.of(context).pushReplacement(
         PageRouteBuilder(
-          pageBuilder: (context, animation, secondaryAnimation) => const UpgradedLoginScreen(),
+          pageBuilder: (context, animation, secondaryAnimation) => const LoginScreen(),
           transitionsBuilder: (context, animation, secondaryAnimation, child) {
             return FadeTransition(opacity: animation, child: child);
           },

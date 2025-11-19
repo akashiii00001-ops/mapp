@@ -9,6 +9,9 @@ class Config {
   // OPTION B: Use this for Physical Phone (Update IP)
   // static const String baseUrl = 'http://192.168.1.5/psu_yearbook_api';
 
+  // Alias for baseUrl to fix "getter apiUrl isn't defined" error
+  static const String apiUrl = baseUrl;
+
   // ==================================================================
   //  API ENDPOINTS
   // ==================================================================

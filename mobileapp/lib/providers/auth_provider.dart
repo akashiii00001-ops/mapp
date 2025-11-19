@@ -8,7 +8,7 @@ class AuthProvider with ChangeNotifier {
 
   AuthStep get currentStep => _currentStep;
   
-  // Calculate progress: 0.25 for login, 0.5 for identity, etc.
+  // Calculate progress
   double get progress {
     switch (_currentStep) {
       case AuthStep.login:
@@ -24,6 +24,12 @@ class AuthProvider with ChangeNotifier {
 
   void setStep(AuthStep step) {
     _currentStep = step;
+    notifyListeners();
+  }
+
+  // FIX: Added logout method
+  void logout() {
+    _currentStep = AuthStep.login;
     notifyListeners();
   }
 }

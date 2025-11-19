@@ -22,14 +22,15 @@ import 'package:mobileapp/screens/forgot_password_screen.dart';
 import 'package:mobileapp/screens/account_status_screen.dart';
 
 
-class UpgradedLoginScreen extends StatefulWidget {
-  const UpgradedLoginScreen({super.key});
+// RENAMED FROM UpgradedLoginScreen TO LoginScreen
+class LoginScreen extends StatefulWidget {
+  const LoginScreen({super.key});
 
   @override
-  State<UpgradedLoginScreen> createState() => _UpgradedLoginScreenState();
+  State<LoginScreen> createState() => _LoginScreenState();
 }
 
-class _UpgradedLoginScreenState extends State<UpgradedLoginScreen> {
+class _LoginScreenState extends State<LoginScreen> {
   // --- Variables ---
   bool _obscureText = true;
   final TextEditingController _studentNumberController =
@@ -143,7 +144,8 @@ class _UpgradedLoginScreenState extends State<UpgradedLoginScreen> {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        backgroundColor: kPrimaryDark.withOpacity(0.9),
+        // FIX: Updated withOpacity to withValues
+        backgroundColor: kPrimaryDark.withValues(alpha: 0.9),
         title: const Text('Login Error', style: TextStyle(color: Colors.redAccent)),
         content: Text(message, style: const TextStyle(color: Colors.white)),
         actions: [
@@ -234,7 +236,8 @@ class _UpgradedLoginScreenState extends State<UpgradedLoginScreen> {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        backgroundColor: kPrimaryDark.withOpacity(0.9),
+        // FIX: Updated withOpacity to withValues
+        backgroundColor: kPrimaryDark.withValues(alpha: 0.9),
         title: Text(title, style: TextStyle(color: titleColor)),
         content: Text(message, style: const TextStyle(color: Colors.white)),
         actions: [
@@ -268,7 +271,8 @@ class _UpgradedLoginScreenState extends State<UpgradedLoginScreen> {
             decoration: BoxDecoration(
               gradient: LinearGradient(
                 colors: [
-                  kPrimaryDark.withOpacity(0.8),
+                  // FIX: Updated withOpacity to withValues
+                  kPrimaryDark.withValues(alpha: 0.8),
                   kPrimaryDark,
                 ],
                 begin: Alignment.topCenter,
@@ -430,7 +434,8 @@ class _UpgradedLoginScreenState extends State<UpgradedLoginScreen> {
           boxShadow: _isLogoHovering
               ? [
                   BoxShadow(
-                    color: kPrimaryGold.withOpacity(0.7),
+                    // FIX: Updated withOpacity to withValues
+                    color: kPrimaryGold.withValues(alpha: 0.7),
                     blurRadius: 30,
                     spreadRadius: 5,
                   ),
@@ -458,10 +463,12 @@ class _UpgradedLoginScreenState extends State<UpgradedLoginScreen> {
         child: Container(
           padding: const EdgeInsets.all(24),
           decoration: BoxDecoration(
-            color: Colors.white.withOpacity(0.1),
+            // FIX: Updated withOpacity to withValues
+            color: Colors.white.withValues(alpha: 0.1),
             borderRadius: BorderRadius.circular(20),
             border: Border.all(
-              color: Colors.white.withOpacity(0.2),
+              // FIX: Updated withOpacity to withValues
+              color: Colors.white.withValues(alpha: 0.2),
             ),
           ),
           child: child,
@@ -488,7 +495,8 @@ class _UpgradedLoginScreenState extends State<UpgradedLoginScreen> {
         boxShadow: isFocused
             ? [
                 BoxShadow(
-                  color: kPrimaryGold.withOpacity(0.5),
+                  // FIX: Updated withOpacity to withValues
+                  color: kPrimaryGold.withValues(alpha: 0.5),
                   blurRadius: 10,
                   spreadRadius: 2,
                 )
@@ -504,9 +512,11 @@ class _UpgradedLoginScreenState extends State<UpgradedLoginScreen> {
         onSubmitted: onSubmitted,
         decoration: InputDecoration(
           hintText: hint,
-          hintStyle: TextStyle(color: Colors.white.withOpacity(0.7)),
+          // FIX: Updated withOpacity to withValues
+          hintStyle: TextStyle(color: Colors.white.withValues(alpha: 0.7)),
           filled: true,
-          fillColor: Colors.black.withOpacity(0.3),
+          // FIX: Updated withOpacity to withValues
+          fillColor: Colors.black.withValues(alpha: 0.3),
           // 1. Animated Icon
           prefixIcon: Padding(
             padding: const EdgeInsets.only(left: 20, right: 12),
@@ -544,7 +554,8 @@ class _UpgradedLoginScreenState extends State<UpgradedLoginScreen> {
           // 2. Border Color Transition
           enabledBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(30),
-            borderSide: BorderSide(color: Colors.white.withOpacity(0.3)),
+            // FIX: Updated withOpacity to withValues
+            borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.3)),
           ),
           focusedBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(30),
@@ -567,7 +578,8 @@ class _UpgradedLoginScreenState extends State<UpgradedLoginScreen> {
           boxShadow: _isLoginButtonHovering
               ? [
                   BoxShadow(
-                    color: kPrimaryGold.withOpacity(0.5),
+                    // FIX: Updated withOpacity to withValues
+                    color: kPrimaryGold.withValues(alpha: 0.5),
                     blurRadius: 20,
                     spreadRadius: 0,
                   ),
