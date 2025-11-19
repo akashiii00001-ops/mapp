@@ -1,9 +1,11 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
-import 'package:mobileapp/config.dart';
-import 'package:mobileapp/providers/user_provider.dart';
 import 'package:provider/provider.dart';
+import 'package:mobileapp/config.dart';
+import 'package:mobileapp/theme.dart';
+import 'package:mobileapp/providers/user_provider.dart';
+import 'package:mobileapp/widgets/loading_dialog.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -13,105 +15,110 @@ class SettingsScreen extends StatefulWidget {
 }
 
 class _SettingsScreenState extends State<SettingsScreen> {
-  final _formKey = GlobalKey<FormState>();
-  final _currentPassController = TextEditingController();
-  final _newEmailController = TextEditingController();
-  final _newPassController = TextEditingController();
-  bool _isLoading = false;
+  final _currentPassCtrl = TextEditingController();
+  final _newValueCtrl = TextEditingController();
 
-  Future<void> _updateSettings() async {
-    if (!_formKey.currentState!.validate()) return;
-    setState(() => _isLoading = true);
+  void _showUpdateDialog(String type) {
+    _currentPassCtrl.clear();
+    _newValueCtrl.clear();
+    
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text("Change $type"),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text("Please verify your identity to continue."),
+            const SizedBox(height: 10),
+            TextField(
+              controller: _currentPassCtrl,
+              obscureText: true,
+              decoration: const InputDecoration(labelText: "Current Password", border: OutlineInputBorder(), prefixIcon: Icon(Icons.lock)),
+            ),
+            const SizedBox(height: 15),
+            TextField(
+              controller: _newValueCtrl,
+              obscureText: type == "Password",
+              decoration: InputDecoration(labelText: "New $type", border: const OutlineInputBorder(), prefixIcon: Icon(type == "Password" ? Icons.key : Icons.email)),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text("Cancel")),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: kPrimaryGold),
+            onPressed: () {
+              Navigator.pop(context);
+              _submitUpdate(type);
+            },
+            child: const Text("Update", style: TextStyle(color: kPrimaryDark)),
+          )
+        ],
+      ),
+    );
+  }
 
-    final userId = context.read<UserProvider>().studentId;
+  Future<void> _submitUpdate(String type) async {
+    showLoadingDialog(context, "Updating...");
+    final user = context.read<UserProvider>();
 
     try {
       final response = await http.post(
         Uri.parse(Config.updateSettingsUrl),
         headers: {'Content-Type': 'application/json'},
         body: json.encode({
-          'student_id': userId,
-          'current_password': _currentPassController.text,
-          'new_email': _newEmailController.text,
-          'new_password': _newPassController.text,
+          'student_id': user.studentId,
+          'type': type.toLowerCase(),
+          'value': _newValueCtrl.text,
+          'current_password': _currentPassCtrl.text,
         }),
       );
 
+      Navigator.pop(context); // Close loader
       final data = json.decode(response.body);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(data['message'] ?? 'Unknown response')),
-      );
 
-      if (data['status'] == 'success') {
-        _currentPassController.clear();
-        _newPassController.clear();
-      }
-    } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Failed to connect to server')),
+        SnackBar(
+          content: Text(data['message']),
+          backgroundColor: data['status'] == 'success' ? Colors.green : Colors.red,
+        ),
       );
-    } finally {
-      setState(() => _isLoading = false);
+    } catch (e) {
+      Navigator.pop(context);
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Error: $e"), backgroundColor: Colors.red));
     }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Settings')),
-      body: SingleChildScrollView(
+      appBar: AppBar(title: const Text("Settings")),
+      body: ListView(
         padding: const EdgeInsets.all(16),
-        child: Form(
-          key: _formKey,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text("Security Verification", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-              const SizedBox(height: 10),
-              TextFormField(
-                controller: _currentPassController,
-                obscureText: true,
-                decoration: const InputDecoration(
-                  labelText: 'Current Password (Required)',
-                  border: OutlineInputBorder(),
-                  prefixIcon: Icon(Icons.lock),
-                ),
-                validator: (v) => v!.isEmpty ? 'Enter current password' : null,
-              ),
-              const Divider(height: 40),
-              const Text("Update Information", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-              const SizedBox(height: 10),
-              TextFormField(
-                controller: _newEmailController,
-                decoration: const InputDecoration(
-                  labelText: 'New Email Address (Optional)',
-                  border: OutlineInputBorder(),
-                  prefixIcon: Icon(Icons.email),
-                ),
-              ),
-              const SizedBox(height: 15),
-              TextFormField(
-                controller: _newPassController,
-                obscureText: true,
-                decoration: const InputDecoration(
-                  labelText: 'New Password (Optional)',
-                  border: OutlineInputBorder(),
-                  prefixIcon: Icon(Icons.key),
-                ),
-              ),
-              const SizedBox(height: 30),
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton(
-                  onPressed: _isLoading ? null : _updateSettings,
-                  child: _isLoading 
-                    ? const CircularProgressIndicator() 
-                    : const Text("Save Changes"),
-                ),
-              ),
-            ],
+        children: [
+          const Text("Account Security", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: kPrimaryBlue)),
+          const SizedBox(height: 10),
+          Card(
+            elevation: 2,
+            child: ListTile(
+              leading: const Icon(Icons.password, color: kPrimaryGold),
+              title: const Text("Change Password"),
+              trailing: const Icon(Icons.arrow_forward_ios, size: 16),
+              onTap: () => _showUpdateDialog("Password"),
+            ),
           ),
-        ),
+          const SizedBox(height: 10),
+          Card(
+            elevation: 2,
+            child: ListTile(
+              leading: const Icon(Icons.email, color: kPrimaryGold),
+              title: const Text("Change Email"),
+              trailing: const Icon(Icons.arrow_forward_ios, size: 16),
+              onTap: () => _showUpdateDialog("Email"),
+            ),
+          ),
+        ],
       ),
     );
   }
