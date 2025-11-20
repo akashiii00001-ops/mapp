@@ -35,11 +35,41 @@ if ($status !== 'Employed') {
 }
 
 if ($student_id > 0) {
-    $stmt = $conn->prepare("INSERT INTO alumni_employment_history (student_id, employment_status, job_title, company_name, industry_id, time_to_first_job, is_relevant_to_course, location_city) VALUES (?, ?, ?, ?, ?, ?, ?, ?)");
-    $stmt->bind_param("isssisss", $student_id, $status, $job_title, $company, $industry_id, $time_first_job, $relevant, $location);
+    // 1. Check if a record already exists for this student
+    $check_stmt = $conn->prepare("SELECT history_id FROM alumni_employment_history WHERE student_id = ?");
+    $check_stmt->bind_param("i", $student_id);
+    $check_stmt->execute();
+    $result = $check_stmt->get_result();
+    $exists = $result->num_rows > 0;
+    $check_stmt->close();
+
+    if ($exists) {
+        // 2. Record exists: UPDATE it
+        // Note: We update date_recorded to the current time as well
+        $stmt = $conn->prepare("UPDATE alumni_employment_history 
+                                SET employment_status = ?, 
+                                    job_title = ?, 
+                                    company_name = ?, 
+                                    industry_id = ?, 
+                                    time_to_first_job = ?, 
+                                    is_relevant_to_course = ?, 
+                                    location_city = ?, 
+                                    date_recorded = CURRENT_TIMESTAMP 
+                                WHERE student_id = ?");
+        // Types: s=string, i=int. 
+        // Params order: status, job, company, industry, time, relevant, location, student_id
+        $stmt->bind_param("sssisssi", $status, $job_title, $company, $industry_id, $time_first_job, $relevant, $location, $student_id);
+        $action_msg = 'History updated successfully';
+    } else {
+        // 3. No record: INSERT a new one
+        $stmt = $conn->prepare("INSERT INTO alumni_employment_history (student_id, employment_status, job_title, company_name, industry_id, time_to_first_job, is_relevant_to_course, location_city) VALUES (?, ?, ?, ?, ?, ?, ?, ?)");
+        // Params order: student_id, status, job, company, industry, time, relevant, location
+        $stmt->bind_param("isssisss", $student_id, $status, $job_title, $company, $industry_id, $time_first_job, $relevant, $location);
+        $action_msg = 'History saved successfully';
+    }
 
     if ($stmt->execute()) {
-        echo json_encode(['status' => 'success', 'message' => 'History saved successfully']);
+        echo json_encode(['status' => 'success', 'message' => $action_msg]);
     } else {
         echo json_encode(['status' => 'error', 'message' => 'Database error: ' . $stmt->error]);
     }
